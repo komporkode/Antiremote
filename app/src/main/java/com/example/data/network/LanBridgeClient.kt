@@ -208,20 +208,22 @@ class LanBridgeClient(
                 }
 
                 // 2. LIVE STREAM CHAT AGENT (BARU!)
-                "AGENT_STREAM_CHUNK" -> {
-                    val deltaToken = json.optString("delta", "")
-                    appendChatStream(deltaToken)
+                "AGENT_STREAM_CHUNK", "STREAM_CHUNK", "CHUNK", "DELTA", "AGENT_CHUNK" -> {
+                    val deltaToken = json.optString("delta", json.optString("chunk", json.optString("token", json.optString("text", ""))))
+                    if (deltaToken.isNotEmpty()) {
+                        appendChatStream(deltaToken)
+                    }
                 }
 
                 // 3. AGENT TOOL EXECUTION BADGE (BARU!)
-                "AGENT_TOOL_CALL" -> {
-                    val toolName = json.optString("toolName", "code_action")
+                "AGENT_TOOL_CALL", "TOOL_CALL", "TOOL_START", "AGENT_TOOL" -> {
+                    val toolName = json.optString("toolName", json.optString("tool", json.optString("name", "code_action")))
                     showAgentToolBadge("Sedang mengeksekusi: $toolName...")
                 }
 
                 // 4. AGENT SELESAI (BARU!)
-                "AGENT_DONE" -> {
-                    val convId = json.optString("conversationId").ifEmpty { null }
+                "AGENT_DONE", "AGENT_FINISHED", "STREAM_DONE", "DONE" -> {
+                    val convId = json.optString("conversationId", json.optString("sessionId", "")).ifEmpty { null }
                     finishChatStream(convId)
                 }
 
@@ -454,13 +456,17 @@ class LanBridgeClient(
     // ==========================================
 
     /**
-     * A. Kirim Prompt Chat ke Agent (dengan Streaming)
+     * A. Kirim Prompt Chat ke Agent (dengan Streaming & Dukungan Kompatibilitas Lengkap)
+     * Mengirimkan paket perintah ke workstation via WebSocket menggunakan format:
+     * 1. AGENT_STREAM_PROMPT (Streaming token realtime)
+     * 2. ANTIGRAVITY_COMMAND (Format resmi bridge workstation 'agy' dari spesifikasi teknis)
+     * 3. USER_CHAT_MESSAGE (Sinkronisasi dua arah chat Antigravity IDE)
      */
     fun sendAgentStreamPrompt(prompt: String, conversationId: String? = null) {
         val trimmed = prompt.trim()
         if (trimmed.isEmpty()) return
 
-        // Tambahkan chat bubble user
+        // 1. Tampilkan chat bubble pengguna langsung di UI layar HP
         _chatMessages.update {
             it + AgentChatMessage(
                 sender = ChatSender.USER,
@@ -469,19 +475,77 @@ class LanBridgeClient(
         }
 
         val convId = conversationId ?: _conversationId.value
+        var socketDelivered = false
 
-        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED && !_connectionConfig.value.isDemoMode) {
-            val payload = JSONObject().apply {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            // A. AGENT_STREAM_PROMPT: Format streaming modern (User Prompt #1)
+            // Dilengkapi seluruh variasi field (prompt, command, message, text, content, data)
+            val streamPayload = JSONObject().apply {
                 put("type", "AGENT_STREAM_PROMPT")
+                put("action", "AGENT_STREAM_PROMPT")
                 put("prompt", trimmed)
-                if (convId != null) put("conversationId", convId)
-                put("effort", "high") // low | medium | high | xhigh
+                put("command", trimmed)
+                put("message", trimmed)
+                put("text", trimmed)
+                put("content", trimmed)
+                if (convId != null) {
+                    put("conversationId", convId)
+                    put("sessionId", convId)
+                }
+                put("effort", "high")
+                put("data", JSONObject().apply {
+                    put("prompt", trimmed)
+                    put("command", trimmed)
+                    put("message", trimmed)
+                    put("text", trimmed)
+                    if (convId != null) put("conversationId", convId)
+                    put("effort", "high")
+                })
             }
-            webSocket?.send(payload.toString())
-            _isAgentStreaming.value = true
-            _agentToolBadge.value = "Menghubungkan ke Agent..."
-        } else {
-            // Simulasi Offline Streaming untuk preview interaktif
+            val res1 = webSocket?.send(streamPayload.toString()) ?: false
+
+            // B. ANTIGRAVITY_COMMAND: Format resmi spesifikasi Antigravity Bridge (TECHNICAL_SPEC_d402e019.md)
+            // Backend Antigravity Bridge di PC mengeksekusi 'agy <command>' di terminal khusus
+            val agyPayload = JSONObject().apply {
+                put("type", "ANTIGRAVITY_COMMAND")
+                put("command", trimmed)
+                put("prompt", trimmed)
+                put("message", trimmed)
+                if (convId != null) put("conversationId", convId)
+            }
+            val res2 = webSocket?.send(agyPayload.toString()) ?: false
+
+            // C. USER_CHAT_MESSAGE: Format sinkronisasi dua arah chat Antigravity IDE
+            val userChatPayload = JSONObject().apply {
+                put("type", "USER_CHAT_MESSAGE")
+                put("prompt", trimmed)
+                put("text", trimmed)
+                put("message", trimmed)
+                put("content", trimmed)
+                if (convId != null) put("conversationId", convId)
+            }
+            val res3 = webSocket?.send(userChatPayload.toString()) ?: false
+
+            // D. AGENT_PROMPT: Alternatif format perintah agent
+            val agentPromptPayload = JSONObject().apply {
+                put("type", "AGENT_PROMPT")
+                put("prompt", trimmed)
+                put("command", trimmed)
+                put("text", trimmed)
+                if (convId != null) put("conversationId", convId)
+            }
+            val res4 = webSocket?.send(agentPromptPayload.toString()) ?: false
+
+            socketDelivered = res1 || res2 || res3 || res4
+            if (socketDelivered) {
+                _isAgentStreaming.value = true
+                _agentToolBadge.value = "Menghubungkan ke Agent..."
+                appendTerminalLog(LogLevel.COMMAND, "[CHAT AGENT] > $trimmed")
+            }
+        }
+
+        if (!socketDelivered) {
+            // Simulasi Offline Streaming untuk preview interaktif jika tidak terhubung ke socket
             simulateAgentStreamingResponse(trimmed)
         }
     }
@@ -490,11 +554,22 @@ class LanBridgeClient(
      * B. Tombol Stop / Cancel Agent (Emergency Switch)
      */
     fun cancelAgentTask() {
-        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED && !_connectionConfig.value.isDemoMode) {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
             val payload = JSONObject().apply {
                 put("type", "AGENT_CANCEL")
             }
             webSocket?.send(payload.toString())
+
+            val agyCancel = JSONObject().apply {
+                put("type", "ANTIGRAVITY_COMMAND")
+                put("command", "cancel")
+            }
+            webSocket?.send(agyCancel.toString())
+
+            val cancelPayload = JSONObject().apply {
+                put("type", "CANCEL_AGENT")
+            }
+            webSocket?.send(cancelPayload.toString())
         }
         agentStreamJob?.cancel()
         _isAgentStreaming.value = false

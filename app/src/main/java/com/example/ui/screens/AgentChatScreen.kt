@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.example.data.model.AgentChatMessage
 import com.example.data.model.ChatSender
 import com.example.ui.theme.*
@@ -302,6 +304,14 @@ fun AgentChatScreen(
                     onValueChange = onInputChange,
                     modifier = Modifier
                         .weight(1f)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed && keyEvent.type == KeyEventType.KeyUp) {
+                                if (inputPrompt.isNotBlank()) {
+                                    onSendPrompt(inputPrompt)
+                                    true
+                                } else false
+                            } else false
+                        }
                         .testTag("agent_chat_input"),
                     placeholder = {
                         Text(
@@ -320,27 +330,38 @@ fun AgentChatScreen(
                         focusedTextColor = ContentPrimary,
                         unfocusedTextColor = ContentPrimary
                     ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Send,
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
                     keyboardActions = KeyboardActions(onSend = {
-                        if (inputPrompt.isNotBlank()) onSendPrompt(inputPrompt)
+                        if (inputPrompt.isNotBlank()) {
+                            onSendPrompt(inputPrompt)
+                        }
                     })
                 )
 
-                IconButton(
+                FilledIconButton(
                     onClick = {
-                        if (inputPrompt.isNotBlank()) onSendPrompt(inputPrompt)
+                        if (inputPrompt.isNotBlank()) {
+                            onSendPrompt(inputPrompt)
+                        }
                     },
                     enabled = inputPrompt.isNotBlank(),
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (inputPrompt.isNotBlank()) AccentPrimary else CardSurfaceVariant)
-                        .testTag("btn_send_agent_prompt")
+                        .size(48.dp)
+                        .testTag("btn_send_agent_prompt"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = AccentPrimary,
+                        contentColor = Color.White,
+                        disabledContainerColor = CardSurfaceVariant,
+                        disabledContentColor = ContentTertiary
+                    )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,
-                        contentDescription = "Send Prompt",
-                        tint = if (inputPrompt.isNotBlank()) Color.White else ContentTertiary,
+                        contentDescription = "Kirim Prompt ke AI Agent",
                         modifier = Modifier.size(20.dp)
                     )
                 }
