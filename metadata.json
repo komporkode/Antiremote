@@ -1,0 +1,6 @@
+{
+  "name": "Antigravity Remote",
+  "description": "Remote monitor and real-time controller for Google Antigravity IDE with Direct LAN Bridge, live terminal, telemetry, and AI agent orchestration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

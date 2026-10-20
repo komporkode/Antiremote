@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Antigravity outer orbital ring -->
+    <path
+        android:strokeColor="#00F5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M34,54 A20,20 0 1,0 74,54 A20,20 0 1,0 34,54" />
+
+    <!-- Orbital tech ticks -->
+    <path
+        android:strokeColor="#A855F7"
+        android:strokeWidth="2"
+        android:pathData="M54,26 L54,30 M54,78 L54,82 M26,54 L30,54 M78,54 L82,54" />
+
+    <!-- Code bracket left < -->
+    <path
+        android:strokeColor="#00F5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M46,45 L40,54 L46,63" />
+
+    <!-- Code bracket right > -->
+    <path
+        android:strokeColor="#00F5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M62,45 L68,54 L62,63" />
+
+    <!-- Central Antigravity floating core -->
+    <path
+        android:fillColor="#A855F7"
+        android:pathData="M54,46 L59,54 L54,62 L49,54 Z" />
+    <path
+        android:fillColor="#00FF9D"
+        android:pathData="M54,51 A3,3 0 1,0 54,57 A3,3 0 1,0 54,51" />
+</vector>

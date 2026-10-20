@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Antigravity Remote</string>
+    <string name="nav_telemetry">Telemetry</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_workspace">Workspace</string>
+    <string name="nav_agent">AI Agent</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_demo">Demo Mode</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_demo_mode">Simulate IDE Bridge</string>
+    <string name="action_scan_qr">Scan QR Code</string>
+    <string name="action_quick_pair">Auto-Pair IDE</string>
+    <string name="action_send_command">Send</string>
+    <string name="action_clear_terminal">Clear</string>
+    <string name="action_trigger_build">Trigger Build</string>
+    <string name="action_stop_agent">Pause Agent</string>
+    <string name="action_resume_agent">Resume Agent</string>
+    <string name="action_save_file">Save to IDE</string>
+    <string name="title_connection_hub">LAN Bridge Connection</string>
+    <string name="desc_connection_hub">Connect to Google Antigravity IDE running on your workstation.</string>
+</resources>
