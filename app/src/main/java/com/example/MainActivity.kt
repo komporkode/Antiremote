@@ -84,9 +84,17 @@ fun AntigravityApp(
 
     LaunchedEffect(config.status) {
         if (config.status == ConnectionStatus.CONNECTED) {
-            BridgeNotificationService.start(context)
+            try {
+                BridgeNotificationService.start(context)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Failed to start BridgeNotificationService", e)
+            }
         } else if (config.status == ConnectionStatus.DISCONNECTED || config.status == ConnectionStatus.ERROR) {
-            BridgeNotificationService.stop(context)
+            try {
+                BridgeNotificationService.stop(context)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Failed to stop BridgeNotificationService", e)
+            }
         }
     }
 
