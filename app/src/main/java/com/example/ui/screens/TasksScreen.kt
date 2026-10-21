@@ -176,7 +176,7 @@ fun TasksScreen(
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("+ Percakapan Baru", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Percakapan Baru", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
