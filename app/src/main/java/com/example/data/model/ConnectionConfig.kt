@@ -17,9 +17,9 @@ data class ConnectionConfig(
     val serverVersion: String = "1.0.0",
     val hostname: String = "Workstation",
     val platform: String = "Unknown",
-    val workspaceName: String = "cms-landing-page",
-    val activeDocument: String = "App.tsx",
+    val workspaceName: String = "Workspace",
+    val activeDocument: String = "",
     val authRequired: Boolean = false,
     val authToken: String = "",
-    val activeProject: String = "cms-landing-page"
+    val activeProject: String = "Workspace"
 )

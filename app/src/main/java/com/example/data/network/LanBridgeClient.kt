@@ -64,9 +64,9 @@ class LanBridgeClient(
     val conversationId: StateFlow<String?> = _conversationId.asStateFlow()
 
     private val _workspaceInfo = MutableStateFlow(WorkspaceInfo(
-        projectName = "cms-landing-page",
-        activeFileName = "App.tsx",
-        cursorLine = 45
+        projectName = "Workspace",
+        activeFileName = "Tidak ada berkas aktif",
+        cursorLine = 1
     ))
     val workspaceInfo: StateFlow<WorkspaceInfo> = _workspaceInfo.asStateFlow()
 
@@ -85,6 +85,18 @@ class LanBridgeClient(
 
     private val _activeFileContent = MutableStateFlow<FileContentData?>(null)
     val activeFileContent: StateFlow<FileContentData?> = _activeFileContent.asStateFlow()
+
+    // 1. Human-in-the-Loop Approval Request State
+    private val _pendingApproval = MutableStateFlow<AgentApprovalRequest?>(null)
+    val pendingApproval: StateFlow<AgentApprovalRequest?> = _pendingApproval.asStateFlow()
+
+    // 2. Code Review & Diffs State
+    private val _workspaceDiffs = MutableStateFlow<List<FileDiff>>(createInitialDiffs())
+    val workspaceDiffs: StateFlow<List<FileDiff>> = _workspaceDiffs.asStateFlow()
+
+    // 3. Multi-Session & Conversation History State
+    private val _conversationSessions = MutableStateFlow<List<ConversationSession>>(createInitialSessions())
+    val conversationSessions: StateFlow<List<ConversationSession>> = _conversationSessions.asStateFlow()
 
     init {
         appendTerminalLog(LogLevel.INFO, "Antigravity Remote Client siap (Port Default: 9876). Scan QR atau hubungkan.")
@@ -204,6 +216,14 @@ class LanBridgeClient(
                                 activeDocument = doc.ifEmpty { it.activeDocument }
                             )
                         }
+                        if (wsName.isNotEmpty() && wsName != "No Workspace") {
+                            _workspaceInfo.update { current ->
+                                current.copy(
+                                    projectName = wsName,
+                                    activeFileName = if (doc.isNotEmpty()) doc.substringAfterLast("/") else current.activeFileName
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -230,10 +250,10 @@ class LanBridgeClient(
                 // 5. INFO WORKSPACE & FILE AKTIF (BARU!)
                 "WORKSPACE_INFO" -> {
                     val data = json.optJSONObject("data")
-                    val projectName = data?.optString("name") ?: json.optString("name", "cms-landing-page")
+                    val projectName = data?.optString("name") ?: json.optString("name", _workspaceInfo.value.projectName)
                     val activeFile = data?.optJSONObject("activeFile")
-                    val fileName = activeFile?.optString("name") ?: "Tidak ada file aktif"
-                    val line = activeFile?.optInt("cursorLine") ?: 0
+                    val fileName = activeFile?.optString("name") ?: json.optString("activeDocument", _workspaceInfo.value.activeFileName)
+                    val line = activeFile?.optInt("cursorLine") ?: _workspaceInfo.value.cursorLine
                     updateWorkspaceHeader(projectName, fileName, line)
                 }
 
@@ -350,10 +370,105 @@ class LanBridgeClient(
                     appendTerminalLog(LogLevel.SUCCESS, "Berkas '" + path + "' berhasil disimpan di workstation.")
                 }
 
+                // 13. PERMINTAAN PERSETUJUAN DARI AGENT (HUMAN-IN-THE-LOOP)
+                "AGENT_APPROVAL_REQUEST" -> {
+                    val reqId = json.optString("id", UUID.randomUUID().toString())
+                    val action = json.optString("action", "TERMINAL_CMD")
+                    val title = json.optString("title", "Konfirmasi Aksi")
+                    val detail = json.optString("detail", "")
+                    val optionsArr = json.optJSONArray("options")
+                    val optionsList = mutableListOf<String>()
+                    if (optionsArr != null) {
+                        for (i in 0 until optionsArr.length()) {
+                            optionsList.add(optionsArr.getString(i))
+                        }
+                    }
+                    val approval = AgentApprovalRequest(
+                        id = reqId,
+                        actionType = action,
+                        title = title,
+                        detail = detail,
+                        options = if (optionsList.isNotEmpty()) optionsList else listOf("Izinkan", "Tolak"),
+                        status = ApprovalStatus.PENDING
+                    )
+                    _pendingApproval.value = approval
+                    _chatMessages.update { list ->
+                        list + AgentChatMessage(
+                            sender = ChatSender.AGENT,
+                            text = "AI Agent meminta persetujuan: $title",
+                            approvalRequest = approval
+                        )
+                    }
+                    appendTerminalLog(LogLevel.WARN, "[APPROVAL REQUIRED] $title: $detail")
+                }
+
+                // 14. DATA REVIEW & DIFFS PERUBAHAN BERKAS
+                "WORKSPACE_DIFFS", "GIT_DIFFS" -> {
+                    val filesArr = json.optJSONArray("files")
+                    if (filesArr != null) {
+                        val diffList = mutableListOf<FileDiff>()
+                        for (i in 0 until filesArr.length()) {
+                            val fObj = filesArr.getJSONObject(i)
+                            val fPath = fObj.optString("path", "")
+                            val statusStr = fObj.optString("status", "MODIFIED").uppercase()
+                            val status = when (statusStr) {
+                                "ADDED" -> DiffFileStatus.ADDED
+                                "DELETED" -> DiffFileStatus.DELETED
+                                else -> DiffFileStatus.MODIFIED
+                            }
+                            val adds = fObj.optInt("additions", 0)
+                            val dels = fObj.optInt("deletions", 0)
+                            val raw = fObj.optString("diff", "")
+                            diffList.add(
+                                FileDiff(
+                                    path = fPath,
+                                    status = status,
+                                    additions = adds,
+                                    deletions = dels,
+                                    hunks = parseDiffHunks(raw),
+                                    rawDiff = raw
+                                )
+                            )
+                        }
+                        if (diffList.isNotEmpty()) {
+                            _workspaceDiffs.value = diffList
+                        }
+                    }
+                }
+
+                // 15. RIWAYAT SESI / MULTI-CONVERSATION
+                "CONVERSATION_SESSIONS", "SESSIONS_LIST" -> {
+                    val sessArr = json.optJSONArray("sessions")
+                    if (sessArr != null) {
+                        val sessList = mutableListOf<ConversationSession>()
+                        for (i in 0 until sessArr.length()) {
+                            val sObj = sessArr.getJSONObject(i)
+                            sessList.add(
+                                ConversationSession(
+                                    id = sObj.optString("id", UUID.randomUUID().toString()),
+                                    title = sObj.optString("title", "Percakapan"),
+                                    lastMessage = sObj.optString("lastMessage", ""),
+                                    updatedAt = sObj.optLong("updatedAt", System.currentTimeMillis()),
+                                    isActive = sObj.optBoolean("isActive", false),
+                                    messageCount = sObj.optInt("messageCount", 1)
+                                )
+                            )
+                        }
+                        if (sessList.isNotEmpty()) {
+                            _conversationSessions.value = sessList
+                        }
+                    }
+                }
+
                 // Fallbacks & Previous Commands
                 "WELCOME" -> {
                     val server = json.optString("server", "Antigravity Bridge")
                     val version = json.optString("version", "1.0.0")
+                    val wsName = json.optString("workspaceName", "")
+                    if (wsName.isNotEmpty() && wsName != "No Workspace") {
+                        _connectionConfig.update { it.copy(workspaceName = wsName) }
+                        _workspaceInfo.update { it.copy(projectName = wsName) }
+                    }
                     appendTerminalLog(LogLevel.SUCCESS, "[$server v$version] Siap menerima perintah.")
                 }
 
@@ -513,65 +628,16 @@ class LanBridgeClient(
         var socketDelivered = false
 
         if (webSocket != null && !_connectionConfig.value.isDemoMode) {
-            // A. AGENT_STREAM_PROMPT:• Format streaming modern (User Prompt #1)
-            // Dilengkapi seluruh variasi field (prompt, command, message, text, content, data)
-            val streamPayload = JSONObject().apply {
+            // Kirim paket AGENT_STREAM_PROMPT langsung ke bridge server
+            val streamPayload = org.json.JSONObject().apply {
                 put("type", "AGENT_STREAM_PROMPT")
-                put("action", "AGENT_STREAM_PROMPT")
                 put("prompt", trimmed)
-                put("command", trimmed)
-                put("message", trimmed)
-                put("text", trimmed)
-                put("content", trimmed)
                 if (convId != null) {
                     put("conversationId", convId)
-                    put("sessionId", convId)
                 }
                 put("effort", "high")
-                put("data", JSONObject().apply {
-                    put("prompt", trimmed)
-                    put("command", trimmed)
-                    put("message", trimmed)
-                    put("text", trimmed)
-                    if (convId != null) put("conversationId", convId)
-                    put("effort", "high")
-                })
             }
-            val res1 = webSocket?.send(streamPayload.toString()) ?: false
-
-            // B. ANTIGRAVITY_COMMAND:• Format resmi spesifikasi Antigravity Bridge (TECHNICAL_SPEC_d402e019.md)
-            // Backend Antigravity Bridge di PC mengeksekusi 'agy <command>' di terminal khusus
-            val agyPayload = JSONObject().apply {
-                put("type", "ANTIGRAVITY_COMMAND")
-                put("command", trimmed)
-                put("prompt", trimmed)
-                put("message", trimmed)
-                if (convId != null) put("conversationId", convId)
-            }
-            val res2 = webSocket?.send(agyPayload.toString()) ?: false
-
-            // C. USER_CHAT_MESSAGE:• Format sinkronisasi dua arah chat Antigravity IDE
-            val userChatPayload = JSONObject().apply {
-                put("type", "USER_CHAT_MESSAGE")
-                put("prompt", trimmed)
-                put("text", trimmed)
-                put("message", trimmed)
-                put("content", trimmed)
-                if (convId != null) put("conversationId", convId)
-            }
-            val res3 = webSocket?.send(userChatPayload.toString()) ?: false
-
-            // D. AGENT_PROMPT: Alternatif format perintah agent
-            val agentPromptPayload = JSONObject().apply {
-                put("type", "AGENT_PROMPT")
-                put("prompt", trimmed)
-                put("command", trimmed)
-                put("text", trimmed)
-                if (convId != null) put("conversationId", convId)
-            }
-            val res4 = webSocket?.send(agentPromptPayload.toString()) ?: false
-
-            socketDelivered = res1 || res2 || res3 || res4
+            socketDelivered = webSocket?.send(streamPayload.toString()) ?: false
             if (socketDelivered) {
                 _isAgentStreaming.value = true
                 _agentToolBadge.value = "Menghubungkan ke Agent..."
@@ -590,21 +656,10 @@ class LanBridgeClient(
      */
     fun cancelAgentTask() {
         if (webSocket != null && !_connectionConfig.value.isDemoMode) {
-            val payload = JSONObject().apply {
+            val payload = org.json.JSONObject().apply {
                 put("type", "AGENT_CANCEL")
             }
             webSocket?.send(payload.toString())
-
-            val agyCancel = JSONObject().apply {
-                put("type", "ANTIGRAVITY_COMMAND")
-                put("command", "cancel")
-            }
-            webSocket?.send(agyCancel.toString())
-
-            val cancelPayload = JSONObject().apply {
-                put("type", "CANCEL_AGENT")
-            }
-            webSocket?.send(cancelPayload.toString())
         }
         agentStreamJob?.cancel()
         _isAgentStreaming.value = false
@@ -819,13 +874,13 @@ class LanBridgeClient(
                 errorMessage = null,
                 serverVersion = "1.0.0 (Simulasi)",
                 hostname = "ANTIGRAVITY-PC",
-                workspaceName = "cms-landing-page",
-                activeDocument = "App.tsx",
+                workspaceName = "Antiremote Demo",
+                activeDocument = "MainActivity.kt",
                 port = 9876
             )
         }
 
-        updateWorkspaceHeader("cms-landing-page", "App.tsx", 45)
+        updateWorkspaceHeader("Antiremote Demo", "MainActivity.kt", 45)
         appendTerminalLog(LogLevel.INFO, "[DEMO] Mode Simulasi Aktif (Port: 9876).")
 
         simulationJob = scope.launch {
@@ -925,7 +980,7 @@ export default function App() {
 """.trimIndent()
             path.endsWith("package.json") -> """
 {
-  "name": "cms-landing-page",
+  "name": "antiremote",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -944,4 +999,210 @@ export default function App() {
             else -> "// Berkas $path\n// Disinkronkan langsung dari Google Antigravity Workstation.\n"
         }
     }
+
+    /**
+     * Kirim Respons Persetujuan (Human-in-the-Loop)
+     */
+    fun sendApprovalResponse(id: String, approved: Boolean, choice: String) {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "AGENT_APPROVAL_RESPONSE")
+                put("id", id)
+                put("approved", approved)
+                put("choice", choice)
+            }
+            webSocket?.send(payload.toString())
+        }
+
+        // Update local state
+        _pendingApproval.update { current ->
+            if (current?.id == id) null else current
+        }
+        _chatMessages.update { list ->
+            list.map { msg ->
+                if (msg.approvalRequest?.id == id) {
+                    val updatedReq = msg.approvalRequest.copy(
+                        status = if (approved) ApprovalStatus.APPROVED else ApprovalStatus.REJECTED,
+                        selectedOption = choice
+                    )
+                    msg.copy(approvalRequest = updatedReq)
+                } else msg
+            }
+        }
+        appendTerminalLog(
+            if (approved) LogLevel.SUCCESS else LogLevel.WARN,
+            "[APPROVAL] Keputusan untuk '$id': $choice"
+        )
+    }
+
+    /**
+     * Minta Data Diffs Perubahan Berkas
+     */
+    fun requestWorkspaceDiffs() {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "GET_WORKSPACE_DIFFS")
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    /**
+     * Mulai Percakapan Baru (+ Sesi Baru)
+     */
+    fun startNewConversation() {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "NEW_CONVERSATION")
+            }
+            webSocket?.send(payload.toString())
+        }
+        val newId = UUID.randomUUID().toString()
+        _conversationId.value = newId
+        _chatMessages.value = listOf(
+            AgentChatMessage(
+                sender = ChatSender.AGENT,
+                text = "Percakapan baru dimulai. Apa yang ingin kita kerjakan hari ini?"
+            )
+        )
+        _conversationSessions.update { list ->
+            listOf(
+                ConversationSession(
+                    id = newId,
+                    title = "Percakapan Baru",
+                    lastMessage = "Apa yang ingin kita kerjakan hari ini?",
+                    isActive = true
+                )
+            ) + list.map { it.copy(isActive = false) }
+        }
+        appendTerminalLog(LogLevel.INFO, "[SESSION] Memulai sesi baru ($newId)")
+    }
+
+    /**
+     * Beralih ke Sesi Percakapan Lain
+     */
+    fun switchConversation(sessionId: String) {
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "SWITCH_CONVERSATION")
+                put("conversationId", sessionId)
+            }
+            webSocket?.send(payload.toString())
+        }
+        _conversationId.value = sessionId
+        _conversationSessions.update { list ->
+            list.map { it.copy(isActive = it.id == sessionId) }
+        }
+        requestChatHistory()
+    }
+
+    private fun parseDiffHunks(rawDiff: String): List<DiffHunk> {
+        if (rawDiff.isBlank()) return emptyList()
+        val hunks = mutableListOf<DiffHunk>()
+        val lines = rawDiff.lines()
+        var currentHeader = "@@ Perubahan @@"
+        val currentLines = mutableListOf<DiffLine>()
+
+        for (line in lines) {
+            when {
+                line.startsWith("@@") -> {
+                    if (currentLines.isNotEmpty()) {
+                        hunks.add(DiffHunk(currentHeader, currentLines.toList()))
+                        currentLines.clear()
+                    }
+                    currentHeader = line
+                }
+                line.startsWith("+") && !line.startsWith("+++") -> {
+                    currentLines.add(DiffLine(DiffLineType.ADDED, line.removePrefix("+")))
+                }
+                line.startsWith("-") && !line.startsWith("---") -> {
+                    currentLines.add(DiffLine(DiffLineType.DELETED, line.removePrefix("-")))
+                }
+                else -> {
+                    currentLines.add(DiffLine(DiffLineType.UNCHANGED, line.removePrefix(" ")))
+                }
+            }
+        }
+        if (currentLines.isNotEmpty()) {
+            hunks.add(DiffHunk(currentHeader, currentLines.toList()))
+        }
+        return hunks
+    }
+
+    private fun createInitialDiffs(): List<FileDiff> {
+        return listOf(
+            FileDiff(
+                path = "src/components/Hero.tsx",
+                status = DiffFileStatus.MODIFIED,
+                additions = 14,
+                deletions = 3,
+                hunks = listOf(
+                    DiffHunk(
+                        header = "@@ -28,8 +28,19 @@",
+                        lines = listOf(
+                            DiffLine(DiffLineType.UNCHANGED, "export const Hero = () => {"),
+                            DiffLine(DiffLineType.DELETED, "  return <h1 className=\"hero-old\">Old Title</h1>;"),
+                            DiffLine(DiffLineType.ADDED, "  return ("),
+                            DiffLine(DiffLineType.ADDED, "    <div className=\"hero-container-v2\">"),
+                            DiffLine(DiffLineType.ADDED, "      <h1 className=\"text-4xl font-bold\">Modern AI Platform</h1>"),
+                            DiffLine(DiffLineType.ADDED, "      <p className=\"text-muted\">Built with Antigravity IDE</p>"),
+                            DiffLine(DiffLineType.ADDED, "    </div>"),
+                            DiffLine(DiffLineType.ADDED, "  );"),
+                            DiffLine(DiffLineType.UNCHANGED, "};")
+                        )
+                    )
+                ),
+                rawDiff = "@@ -28,8 +28,19 @@\nexport const Hero = () => {\n-  return <h1 className=\"hero-old\">Old Title</h1>;\n+  return (\n+    <div className=\"hero-container-v2\">\n+      <h1 className=\"text-4xl font-bold\">Modern AI Platform</h1>\n+      <p className=\"text-muted\">Built with Antigravity IDE</p>\n+    </div>\n+  );\n};"
+            ),
+            FileDiff(
+                path = "src/styles/globals.css",
+                status = DiffFileStatus.MODIFIED,
+                additions = 8,
+                deletions = 0,
+                hunks = listOf(
+                    DiffHunk(
+                        header = "@@ -110,4 +110,12 @@",
+                        lines = listOf(
+                            DiffLine(DiffLineType.UNCHANGED, ".btn {"),
+                            DiffLine(DiffLineType.ADDED, "  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);"),
+                            DiffLine(DiffLineType.ADDED, "  border-radius: 8px;"),
+                            DiffLine(DiffLineType.ADDED, "  box-shadow: 0 1px 2px rgba(0,0,0,0.06);"),
+                            DiffLine(DiffLineType.UNCHANGED, "}")
+                        )
+                    )
+                ),
+                rawDiff = "@@ -110,4 +110,12 @@\n.btn {\n+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);\n+  border-radius: 8px;\n+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);\n}"
+            )
+        )
+    }
+
+    private fun createInitialSessions(): List<ConversationSession> {
+        return listOf(
+            ConversationSession(
+                id = "sess-1",
+                title = "Refactor Hero & Style Minimalist",
+                lastMessage = "Hero section diperbarui sesuai standar Linear",
+                updatedAt = System.currentTimeMillis() - 1000 * 60 * 15,
+                isActive = true,
+                messageCount = 6
+            ),
+            ConversationSession(
+                id = "sess-2",
+                title = "Integrasi WebSocket Bridge",
+                lastMessage = "Port 9876 handshake sukses",
+                updatedAt = System.currentTimeMillis() - 1000 * 60 * 120,
+                isActive = false,
+                messageCount = 14
+            ),
+            ConversationSession(
+                id = "sess-3",
+                title = "Audit Performa & Build Vite",
+                lastMessage = "Semua test lulus dengan coverage 92%",
+                updatedAt = System.currentTimeMillis() - 1000 * 3600 * 24,
+                isActive = false,
+                messageCount = 9
+            )
+        )
+    }
 }
+

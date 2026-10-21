@@ -1,9 +1,9 @@
 package com.example.data.model
 
 data class WorkspaceInfo(
-    val projectName: String = "cms-landing-page",
-    val activeFileName: String = "App.tsx",
-    val cursorLine: Int = 45
+    val projectName: String = "Workspace",
+    val activeFileName: String = "Tidak ada berkas aktif",
+    val cursorLine: Int = 1
 )
 
 data class FileContentData(

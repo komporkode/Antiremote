@@ -26,6 +26,11 @@ class AntigravityViewModel(
     val workspaceFileList: StateFlow<List<String>> = repository.workspaceFileList
     val activeFileContent: StateFlow<FileContentData?> = repository.activeFileContent
 
+    // Human-in-the-Loop, Diff Review, & Multi-Session flows
+    val pendingApproval: StateFlow<AgentApprovalRequest?> = repository.pendingApproval
+    val workspaceDiffs: StateFlow<List<FileDiff>> = repository.workspaceDiffs
+    val conversationSessions: StateFlow<List<ConversationSession>> = repository.conversationSessions
+
     fun selectTab(tab: DashboardTab) {
         _uiState.update { it.copy(selectedTab = tab) }
     }
@@ -214,5 +219,30 @@ class AntigravityViewModel(
 
     fun clearTerminal() {
         repository.clearLogs()
+    }
+
+    // Approvals, Diffs & Sessions
+    fun sendApprovalResponse(id: String, approved: Boolean, choice: String) {
+        repository.sendApprovalResponse(id, approved, choice)
+    }
+
+    fun requestWorkspaceDiffs() {
+        repository.requestWorkspaceDiffs()
+    }
+
+    fun updateSearchDiffQuery(query: String) {
+        _uiState.update { it.copy(searchDiffQuery = query) }
+    }
+
+    fun selectDiffPath(path: String?) {
+        _uiState.update { it.copy(selectedDiffPath = path) }
+    }
+
+    fun startNewConversation() {
+        repository.startNewConversation()
+    }
+
+    fun switchConversation(sessionId: String) {
+        repository.switchConversation(sessionId)
     }
 }

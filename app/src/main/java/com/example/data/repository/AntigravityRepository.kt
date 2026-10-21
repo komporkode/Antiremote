@@ -22,6 +22,11 @@ class AntigravityRepository(
     val workspaceFileList: StateFlow<List<String>> = client.workspaceFileList
     val activeFileContent: StateFlow<FileContentData?> = client.activeFileContent
 
+    // Human-in-the-Loop, Diff Review, & Multi-Session flows
+    val pendingApproval: StateFlow<AgentApprovalRequest?> = client.pendingApproval
+    val workspaceDiffs: StateFlow<List<FileDiff>> = client.workspaceDiffs
+    val conversationSessions: StateFlow<List<ConversationSession>> = client.conversationSessions
+
     fun connect(ip: String, port: Int = 9876) = client.connect(ip, port)
     fun disconnect() = client.disconnect()
     fun startDemoSimulation() = client.startDemoSimulation()
@@ -41,4 +46,10 @@ class AntigravityRepository(
     fun requestReadFile(relativePath: String) = client.requestReadFile(relativePath)
     fun triggerSaveAll() = client.triggerSaveAll()
     fun closeCodeViewer() = client.closeCodeViewer()
+
+    // Approvals, Diffs & Sessions
+    fun sendApprovalResponse(id: String, approved: Boolean, choice: String) = client.sendApprovalResponse(id, approved, choice)
+    fun requestWorkspaceDiffs() = client.requestWorkspaceDiffs()
+    fun startNewConversation() = client.startNewConversation()
+    fun switchConversation(sessionId: String) = client.switchConversation(sessionId)
 }

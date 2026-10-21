@@ -49,14 +49,17 @@ fun AntigravityApp(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val config by viewModel.connectionConfig.collectAsStateWithLifecycle()
-    val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
+    val agentTask by viewModel.agentTask.collectAsStateWithLifecycle()
     val terminalLogs by viewModel.terminalLogs.collectAsStateWithLifecycle()
     val workspaceInfo by viewModel.workspaceInfo.collectAsStateWithLifecycle()
-    val workspaceFiles by viewModel.workspaceFileList.collectAsStateWithLifecycle()
-    val activeFileContent by viewModel.activeFileContent.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isAgentStreaming by viewModel.isAgentStreaming.collectAsStateWithLifecycle()
     val agentToolBadge by viewModel.agentToolBadge.collectAsStateWithLifecycle()
+
+    // New Linear Minimalist features
+    val pendingApproval by viewModel.pendingApproval.collectAsStateWithLifecycle()
+    val workspaceDiffs by viewModel.workspaceDiffs.collectAsStateWithLifecycle()
+    val conversationSessions by viewModel.conversationSessions.collectAsStateWithLifecycle()
 
     // Show toast on pairing success
     LaunchedEffect(uiState.pairingToastMessage) {
@@ -79,12 +82,12 @@ fun AntigravityApp(
                 onScanQrClick = { viewModel.showQrScanner(true) },
                 onSaveAllClick = {
                     viewModel.triggerSaveAll()
-                    Toast.makeText(context, "Menyimpan semua berkas di VS Code...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Menyimpan semua berkas di PC...", Toast.LENGTH_SHORT).show()
                 }
             )
         },
         bottomBar = {
-            // 3-Tab Bottom Navigation Bar
+            // 3-Tab Bottom Navigation Bar (Linear Style)
             NavigationBar(
                 modifier = Modifier
                     .testTag("bottom_navigation_bar")
@@ -96,8 +99,8 @@ fun AntigravityApp(
                     val isSelected = uiState.selectedTab == tab
                     val (icon, label) = when (tab) {
                         DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
-                        DashboardTab.FILES -> (if (isSelected) Icons.Filled.Folder else Icons.Outlined.Folder) to "Files"
-                        DashboardTab.TELEMETRY -> (if (isSelected) Icons.Filled.Dashboard else Icons.Outlined.Dashboard) to "Dashboard"
+                        DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
+                        DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
                     }
 
                     NavigationBarItem(
@@ -138,54 +141,56 @@ fun AntigravityApp(
                 .background(AppBg)
         ) {
             when (uiState.selectedTab) {
-                // Tab 1: 💬 AI Agent Live Chat (Fitur Utama)
+                // Tab 1: 💬 AI Agent Live Chat & Human-in-the-Loop Approvals
                 DashboardTab.CHAT -> {
                     AgentChatScreen(
                         messages = chatMessages,
                         isStreaming = isAgentStreaming,
                         activeToolBadge = agentToolBadge,
+                        pendingApproval = pendingApproval,
                         inputPrompt = uiState.chatInput,
                         onInputChange = { viewModel.updateChatInput(it) },
                         onSendPrompt = { viewModel.sendChatPrompt(it) },
                         onCancelAgent = { viewModel.cancelAgentTask() },
+                        onApprovalResponse = { id, approved, choice ->
+                            viewModel.sendApprovalResponse(id, approved, choice)
+                        },
                         onSlashCommandClick = { viewModel.insertSlashCommand(it) }
                     )
                 }
 
-                // Tab 2: 📁 Workspace Files & Code Viewer
-                DashboardTab.FILES -> {
-                    WorkspaceFilesScreen(
-                        files = workspaceFiles,
-                        activeFileContent = activeFileContent,
-                        searchQuery = uiState.searchFileQuery,
-                        onSearchQueryChange = { viewModel.updateSearchFileQuery(it) },
-                        onFileClick = { viewModel.openFile(it) },
-                        onCloseCodeViewer = { viewModel.closeCodeViewer() },
-                        onSaveFileEdits = {
-                            viewModel.saveActiveFileEdits(it)
-                            Toast.makeText(context, "Perubahan berkas disimpan", Toast.LENGTH_SHORT).show()
-                        },
-                        onRefreshFiles = {
-                            viewModel.requestWorkspaceFiles()
-                            viewModel.requestWorkspaceInfo()
+                // Tab 2: 🔍 Code Review & Unified Diff Viewer
+                DashboardTab.REVIEW -> {
+                    ReviewDiffScreen(
+                        diffs = workspaceDiffs,
+                        selectedDiffPath = uiState.selectedDiffPath,
+                        searchQuery = uiState.searchDiffQuery,
+                        onSearchQueryChange = { viewModel.updateSearchDiffQuery(it) },
+                        onSelectDiff = { viewModel.selectDiffPath(it) },
+                        onRefreshDiffs = { viewModel.requestWorkspaceDiffs() },
+                        onRequestAiRevision = { path ->
+                            viewModel.updateChatInput("Tolong periksa dan revisi berkas $path: ")
+                            viewModel.selectTab(DashboardTab.CHAT)
                         }
                     )
                 }
 
-                // Tab 3: ⚡ Telemetri CPU/RAM & Terminal Remote
-                DashboardTab.TELEMETRY -> {
-                    TelemetryScreen(
-                        telemetry = telemetry,
-                        connectionConfig = config,
-                        terminalLogs = terminalLogs,
-                        terminalInput = uiState.terminalInput,
-                        onTerminalInputChange = { viewModel.updateTerminalInput(it) },
-                        onSendTerminalCommand = { viewModel.executeTerminalCommand(it) },
-                        onOpenConnectionDialog = { viewModel.showConnectionDialog(true) },
-                        onScanQrClick = { viewModel.showQrScanner(true) },
+                // Tab 3: 📋 Tasks, Multi-Session & Developer Shortcuts
+                DashboardTab.TASKS -> {
+                    TasksScreen(
+                        agentTask = agentTask,
+                        sessions = conversationSessions,
+                        onSelectSession = { sessionId ->
+                            viewModel.switchConversation(sessionId)
+                            viewModel.selectTab(DashboardTab.CHAT)
+                        },
+                        onNewSession = {
+                            viewModel.startNewConversation()
+                            viewModel.selectTab(DashboardTab.CHAT)
+                        },
                         onSaveAll = {
                             viewModel.triggerSaveAll()
-                            Toast.makeText(context, "Save All terkirim ke VS Code", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Save All berhasil terkirim", Toast.LENGTH_SHORT).show()
                         },
                         onRunDev = {
                             viewModel.triggerRunDev()
@@ -202,7 +207,8 @@ fun AntigravityApp(
                         onGitPush = {
                             viewModel.triggerGitPush()
                             Toast.makeText(context, "Menjalankan git push di Workstation", Toast.LENGTH_SHORT).show()
-                        }
+                        },
+                        terminalLogs = terminalLogs
                     )
                 }
             }
@@ -227,7 +233,7 @@ fun AntigravityApp(
         )
     }
 
-    // QR Code Scanner Dialog (CameraX + ML Kit with Auto-Connect)
+    // QR Code Scanner Dialog
     if (uiState.showQrScannerDialog) {
         QrScannerDialog(
             onDismiss = { viewModel.showQrScanner(false) },

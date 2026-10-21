@@ -6,7 +6,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -27,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -34,12 +34,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.input.key.*
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import com.example.data.model.AgentChatMessage
-import com.example.data.model.ChatSender
+import com.example.data.model.*
 import com.example.ui.theme.*
 
 @Composable
@@ -47,10 +45,12 @@ fun AgentChatScreen(
     messages: List<AgentChatMessage>,
     isStreaming: Boolean,
     activeToolBadge: String?,
+    pendingApproval: AgentApprovalRequest? = null,
     inputPrompt: String,
     onInputChange: (String) -> Unit,
     onSendPrompt: (String) -> Unit,
     onCancelAgent: () -> Unit,
+    onApprovalResponse: (id: String, approved: Boolean, choice: String) -> Unit = { _, _, _ -> },
     onSlashCommandClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -78,7 +78,7 @@ fun AgentChatScreen(
             .background(AppBg)
             .testTag("agent_chat_screen")
     ) {
-        // Antigravity IDE Realtime Status Bar
+        // Chat Sync Status Sub-bar
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = CardSurface,
@@ -97,7 +97,7 @@ fun AgentChatScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(7.dp)
+                            .size(6.dp)
                             .clip(CircleShape)
                             .background(AccentSuccess)
                     )
@@ -143,20 +143,20 @@ fun AgentChatScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
+                                imageVector = Icons.Outlined.Forum,
                                 contentDescription = null,
                                 tint = ContentTertiary,
                                 modifier = Modifier.size(36.dp)
                             )
                             Text(
-                                text = "Belum ada pesan aktif",
+                                text = "Belum ada pesan",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     color = ContentSecondary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
                             Text(
-                                text = "Pesan yang diketik di Antigravity IDE desktop maupun dari HP akan otomatis tersinkronisasi di sini secara realtime.",
+                                text = "Ketik instruksi di bawah untuk mulai berkolaborasi dengan AI Agent di Antigravity IDE.",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = ContentTertiary,
                                     fontSize = 12.sp,
@@ -172,13 +172,76 @@ fun AgentChatScreen(
                     StreamingChatBubble(
                         message = msg,
                         isCurrentlyStreaming = msg.isStreaming && isStreaming,
-                        currentToolBadge = if (msg.isStreaming) activeToolBadge else msg.toolBadge
+                        currentToolBadge = if (msg.isStreaming) activeToolBadge else msg.toolBadge,
+                        onApprovalResponse = onApprovalResponse
                     )
                 }
             }
         }
 
-        // Active Agent Status & Prominent Red Stop / Cancel Button (When agent is thinking / streaming)
+        // Sticky Approval Prompt Banner (Jika ada approval yang pending)
+        if (pendingApproval != null && pendingApproval.status == ApprovalStatus.PENDING) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = AccentWarningSoft,
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentWarning.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Security,
+                            contentDescription = null,
+                            tint = AccentWarning,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Izin Diperlukan: ${pendingApproval.title}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = ContentPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            maxLines = 1
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = { onApprovalResponse(pendingApproval.id, true, "Izinkan") },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Izinkan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = { onApprovalResponse(pendingApproval.id, false, "Tolak") },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Tolak", fontSize = 11.sp, color = ContentSecondary)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Active Agent Status & Gentle Stop Button
         AnimatedVisibility(
             visible = isStreaming || activeToolBadge != null,
             enter = fadeIn(),
@@ -188,9 +251,9 @@ fun AgentChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = AccentDanger.copy(alpha = 0.12f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentDanger.copy(alpha = 0.35f))
+                shape = RoundedCornerShape(10.dp),
+                color = CardSurfaceVariant,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
             ) {
                 Row(
                     modifier = Modifier
@@ -205,8 +268,8 @@ fun AgentChatScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = AccentDanger,
+                            modifier = Modifier.size(14.dp),
+                            color = AccentPrimary,
                             strokeWidth = 2.dp
                         )
                         Text(
@@ -220,12 +283,11 @@ fun AgentChatScreen(
                         )
                     }
 
-                    // Stop Streaming Button
                     FilledTonalButton(
                         onClick = onCancelAgent,
                         modifier = Modifier
-                            .height(32.dp)
-                            .testTag("btn_agent_cancel_emergency"),
+                            .height(30.dp)
+                            .testTag("btn_agent_cancel"),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -236,7 +298,7 @@ fun AgentChatScreen(
                         Icon(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Hentikan",
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -272,11 +334,11 @@ fun AgentChatScreen(
                 ) {
                     Text(
                         text = label,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = ContentPrimary,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     )
@@ -288,13 +350,12 @@ fun AgentChatScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = CardSurface,
-            tonalElevation = 4.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -314,7 +375,7 @@ fun AgentChatScreen(
                         .testTag("agent_chat_input"),
                     placeholder = {
                         Text(
-                            text = "Ketik prompt untuk AI Agent...",
+                            text = "Ketik instruksi untuk AI Agent...",
                             color = ContentTertiary,
                             fontSize = 13.sp
                         )
@@ -348,7 +409,7 @@ fun AgentChatScreen(
                     },
                     enabled = inputPrompt.isNotBlank(),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(42.dp)
                         .testTag("btn_send_agent_prompt"),
                     shape = RoundedCornerShape(12.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -360,8 +421,8 @@ fun AgentChatScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Send,
-                        contentDescription = "Kirim Prompt ke AI Agent",
-                        modifier = Modifier.size(20.dp)
+                        contentDescription = "Kirim Prompt",
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -369,89 +430,57 @@ fun AgentChatScreen(
     }
 }
 
-/**
- * Komponen Bubble Chat Streaming Real-time yang menampilkan potongan teks (chunks) via WebSocket
- */
 @Composable
-private fun StreamingChatBubble(
+fun StreamingChatBubble(
     message: AgentChatMessage,
     isCurrentlyStreaming: Boolean,
-    currentToolBadge: String?
+    currentToolBadge: String?,
+    onApprovalResponse: (id: String, approved: Boolean, choice: String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
     val isUser = message.sender == ChatSender.USER
     val isSystem = message.sender == ChatSender.SYSTEM
 
-    // Pesan Sistem (Tersinkron dengan workstation)
-    if (isSystem) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = CardSurfaceVariant,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = null,
-                        tint = AccentSecondary,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = message.text,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = ContentSecondary,
-                            fontSize = 11.sp
-                        )
-                    )
-                }
-            }
-        }
-        return
-    }
-
-    // Animasi denyut kursor streaming
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_cursor")
+    // Animasi blinking kursor
+    val infiniteTransition = rememberInfiniteTransition(label = "CursorPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.2f,
-        targetValue = 1f,
+        targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(500, easing = LinearEasing),
+            animation = tween(450, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "cursor_pulse"
+        label = "CursorAlpha"
     )
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .testTag(if (isUser) "user_chat_bubble" else "agent_streaming_bubble"),
+            .padding(vertical = 2.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        // Label Pengirim & Tool execution badge
+        // Sender Header
         Row(
+            modifier = Modifier.padding(bottom = 4.dp, start = if (isUser) 0.dp else 4.dp, end = if (isUser) 4.dp else 0.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(
-                imageVector = if (isUser) Icons.Default.Person else Icons.Default.AutoAwesome,
+                imageVector = when {
+                    isUser -> Icons.Default.Person
+                    isSystem -> Icons.Default.Info
+                    else -> Icons.Outlined.SmartToy
+                },
                 contentDescription = null,
-                tint = if (isUser) AccentPrimary else AccentSecondary,
+                tint = if (isUser) AccentPrimary else ContentSecondary,
                 modifier = Modifier.size(13.dp)
             )
             Text(
-                text = if (isUser) "You" else "Antigravity Agent",
+                text = when {
+                    isUser -> "You"
+                    isSystem -> "System"
+                    else -> "Antigravity Agent"
+                },
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = ContentSecondary,
                     fontWeight = FontWeight.SemiBold,
@@ -459,12 +488,11 @@ private fun StreamingChatBubble(
                 )
             )
 
-            // 3. AGENT TOOL EXECUTION BADGE (Badge kecil realtime)
             if (!isUser && currentToolBadge != null) {
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = AccentSecondary.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentSecondary.copy(alpha = 0.3f))
+                    color = AccentPrimarySoft,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.3f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -473,13 +501,13 @@ private fun StreamingChatBubble(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(8.dp),
-                            color = AccentSecondary,
+                            color = AccentPrimary,
                             strokeWidth = 1.5.dp
                         )
                         Text(
                             text = currentToolBadge,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = AccentSecondary,
+                                color = AccentPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 fontFamily = FontFamily.Monospace
@@ -502,13 +530,16 @@ private fun StreamingChatBubble(
                         bottomEnd = if (isUser) 4.dp else 14.dp
                     )
                 ),
-            color = if (isUser) AccentPrimary else CardSurface,
+            color = when {
+                isUser -> AccentPrimary
+                isSystem -> AccentDangerSoft
+                else -> CardSurface
+            },
             border = if (isUser) null else androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                // Parse teks jika mengandung markdown code block ``` ... ```
                 val textContent = message.text
                 if (!isUser && textContent.contains("```")) {
                     MarkdownCodeSegments(
@@ -527,7 +558,6 @@ private fun StreamingChatBubble(
                             )
                         )
 
-                        // Streaming cursor indicator
                         if (isCurrentlyStreaming) {
                             Spacer(modifier = Modifier.width(3.dp))
                             Box(
@@ -538,14 +568,152 @@ private fun StreamingChatBubble(
                         }
                     }
                 }
+
+                // Interactive Approval Card (Human-in-the-Loop)
+                if (message.approvalRequest != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    InteractiveApprovalCard(
+                        request = message.approvalRequest,
+                        onResponse = onApprovalResponse
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * Merender potongan teks yang mengandung Markdown code blocks
- */
+@Composable
+fun InteractiveApprovalCard(
+    request: AgentApprovalRequest,
+    onResponse: (id: String, approved: Boolean, choice: String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = CardSurfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (request.status == ApprovalStatus.PENDING) AccentWarning.copy(alpha = 0.5f) else CardBorder
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (request.status == ApprovalStatus.PENDING) AccentWarningSoft else AccentPrimarySoft
+                ) {
+                    Text(
+                        text = request.actionType,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (request.status == ApprovalStatus.PENDING) AccentWarning else AccentPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    )
+                }
+
+                Text(
+                    text = when (request.status) {
+                        ApprovalStatus.PENDING -> "Menunggu Izin"
+                        ApprovalStatus.APPROVED -> "✓ Disetujui"
+                        ApprovalStatus.REJECTED -> "✕ Ditolak"
+                    },
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = when (request.status) {
+                            ApprovalStatus.PENDING -> AccentWarning
+                            ApprovalStatus.APPROVED -> AccentSuccess
+                            ApprovalStatus.REJECTED -> AccentDanger
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                )
+            }
+
+            Text(
+                text = request.title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    color = ContentPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+            )
+
+            if (request.detail.isNotBlank()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(6.dp),
+                    color = AppBg,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                ) {
+                    Text(
+                        text = request.detail,
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = ContentPrimary,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+            }
+
+            if (request.status == ApprovalStatus.PENDING) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    request.options.forEach { option ->
+                        val isPositive = option.contains("izinkan", ignoreCase = true) ||
+                                option.contains("ya", ignoreCase = true) ||
+                                option.contains("approve", ignoreCase = true)
+
+                        Button(
+                            onClick = { onResponse(request.id, isPositive, option) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isPositive) AccentPrimary else CardSurface,
+                                contentColor = if (isPositive) Color.White else ContentPrimary
+                            ),
+                            border = if (!isPositive) androidx.compose.foundation.BorderStroke(1.dp, CardBorder) else null,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = option,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "Respons tersimpan: ${request.selectedOption ?: "Selesai"}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = ContentTertiary,
+                        fontSize = 11.sp
+                    )
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MarkdownCodeSegments(
     content: String,
@@ -558,7 +726,6 @@ private fun MarkdownCodeSegments(
 
     parts.forEachIndexed { index, part ->
         if (index % 2 == 1) {
-            // Ini adalah blok kode
             val firstLine = part.substringBefore("\n").trim()
             val codeBody = if (part.contains("\n")) part.substringAfter("\n") else part
 
@@ -579,7 +746,7 @@ private fun MarkdownCodeSegments(
                         Text(
                             text = firstLine.ifEmpty { "code" },
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = AccentSecondary,
+                                color = AccentPrimary,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp
                             )
@@ -611,7 +778,6 @@ private fun MarkdownCodeSegments(
                 }
             }
         } else {
-            // Teks biasa
             if (part.isNotEmpty()) {
                 Text(
                     text = part,

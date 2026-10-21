@@ -2,8 +2,8 @@ package com.example.ui.viewmodel
 
 enum class DashboardTab(val label: String) {
     CHAT("Chat"),
-    FILES("Files"),
-    TELEMETRY("Dashboard")
+    REVIEW("Review"),
+    TASKS("Tasks")
 }
 
 enum class LogFilter(val label: String) {
@@ -21,7 +21,9 @@ data class AntigravityUiState(
     val targetIpInput: String = "192.168.1.10",
     val targetPortInput: String = "9876",
     val chatInput: String = "",
+    val searchDiffQuery: String = "",
     val searchFileQuery: String = "",
+    val selectedDiffPath: String? = null,
     val terminalInput: String = "",
     val logFilter: LogFilter = LogFilter.ALL,
     val autoScrollTerminal: Boolean = true,
