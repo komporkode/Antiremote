@@ -10,6 +10,7 @@ data class QrHandshakeData(
     val wsUrl: String = "ws://$ip:$port",
     val httpUrl: String = "http://$ip:$port",
     val authToken: String? = null,
+    val pin: String? = null,
     val rawPayload: String = ""
 ) {
     companion object {
@@ -36,12 +37,30 @@ data class QrHandshakeData(
                     try {
                         val json = JSONObject(trimmed)
                         appName = json.optString("app", "antigravity-remote")
+                        val cloudUrl = json.optString("url")
+                        val cloudPin = json.optString("pin").ifEmpty { json.optString("token") }
+                        if (cloudUrl.isNotEmpty()) {
+                            val cleanHost = cloudUrl.removePrefix("wss://").removePrefix("ws://").removePrefix("https://").removePrefix("http://").substringBefore("/")
+                            return QrHandshakeData(
+                                app = appName,
+                                ip = cleanHost,
+                                port = 443,
+                                wsUrl = if (cloudUrl.startsWith("ws")) cloudUrl else "wss://$cloudUrl",
+                                httpUrl = "https://$cleanHost",
+                                authToken = cloudPin.ifEmpty { null },
+                                pin = cloudPin.ifEmpty { null },
+                                rawPayload = trimmed
+                            )
+                        }
+
                         targetIp = json.optString("ip").ifEmpty {
                             json.optString("host")
                         }
                         targetPort = json.optInt("port", DEFAULT_PORT)
-                        token = json.optString("token").ifEmpty {
-                            json.optString("authToken").ifEmpty { null }
+                        token = cloudPin.ifEmpty {
+                            json.optString("token").ifEmpty {
+                                json.optString("authToken").ifEmpty { null }
+                            }
                         }
                     } catch (_: Throwable) {
                         // Fallback to pattern matching if JSONObject is unmocked in JVM unit tests
@@ -58,7 +77,7 @@ data class QrHandshakeData(
                         if (tokenMatch != null) token = tokenMatch.groupValues[1]
                         if (appMatch != null) appName = appMatch.groupValues[1]
                     }
-                } else if (trimmed.startsWith("ws://") || trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("antigravity://")) {
+                } else if (trimmed.startsWith("wss://") || trimmed.startsWith("ws://") || trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("antigravity://")) {
                     val uri = URI(trimmed)
                     targetIp = uri.host ?: ""
                     targetPort = if (uri.port != -1) uri.port else DEFAULT_PORT

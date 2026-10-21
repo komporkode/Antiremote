@@ -120,24 +120,41 @@ class LanBridgeClient(
     /**
      * Connects to Workstation at ws://$ip:$port
      */
-    fun connect(ip: String, port: Int = 9876) {
+        fun connect(target: String, port: Int = 9876, pin: String? = null) {
         simulationJob?.cancel()
         disconnect()
 
-        val cleanIp = ip.trim().removePrefix("http://").removePrefix("ws://").removeSuffix("/")
+        val trimmed = target.trim()
+        val isCloud = trimmed.startsWith("wss://") || 
+                      trimmed.startsWith("https://") || 
+                      trimmed.contains("trycloudflare.com") ||
+                      (!trimmed.contains(":") && trimmed.contains("."))
+
+        val wsUrl = when {
+            trimmed.startsWith("wss://") || trimmed.startsWith("ws://") -> trimmed
+            trimmed.startsWith("https://") -> "wss://" + trimmed.removePrefix("https://")
+            trimmed.startsWith("http://") -> "ws://" + trimmed.removePrefix("http://")
+            isCloud -> "wss://$trimmed"
+            else -> {
+                val clean = trimmed.removePrefix("ws://").removePrefix("http://").removeSuffix("/")
+                if (clean.contains(":")) "ws://$clean" else "ws://$clean:$port"
+            }
+        }
+
+        val displayHost = wsUrl.removePrefix("wss://").removePrefix("ws://").substringBefore("/")
+
         _connectionConfig.update {
             it.copy(
-                ipAddress = cleanIp,
-                port = port,
+                ipAddress = displayHost,
+                port = if (isCloud) 443 else port,
                 status = ConnectionStatus.CONNECTING,
                 isDemoMode = false,
                 errorMessage = null
             )
         }
 
-        appendTerminalLog(LogLevel.INFO, "Menghubungkan ke Workstation ws://$cleanIp:$port ...")
+        appendTerminalLog(LogLevel.INFO, "Menghubungkan ke ${if (isCloud) "Cloud Remote ($wsUrl)" else "Workstation ($wsUrl)"} ...")
 
-        val wsUrl = "ws://$cleanIp:$port"
         val request = Request.Builder().url(wsUrl).build()
 
         lastPingSendTime = System.currentTimeMillis()
@@ -152,7 +169,18 @@ class LanBridgeClient(
                         errorMessage = null
                     )
                 }
-                appendTerminalLog(LogLevel.SUCCESS, "Terhubung ke Antigravity Bridge ($cleanIp:$port) [${ping}ms]")
+                appendTerminalLog(LogLevel.SUCCESS, "Terhubung ke Antigravity Bridge [${ping}ms]")
+
+                // Jika menyertakan PIN keamanan, kirim pesan otentikasi seketika
+                if (!pin.isNullOrBlank()) {
+                    val authPayload = JSONObject().apply {
+                        put("type", "AUTH")
+                        put("pin", pin)
+                        put("token", pin)
+                    }
+                    ws.send(authPayload.toString())
+                    appendTerminalLog(LogLevel.INFO, "Mengirim PIN otentikasi keamanan...")
+                }
 
                 // Auto fetch workspace info, files, and chat history on handshake
                 requestWorkspaceInfo()
@@ -173,7 +201,7 @@ class LanBridgeClient(
                         errorMessage = "Gagal konek: $errorMsg"
                     )
                 }
-                appendTerminalLog(LogLevel.ERROR, "Gagal konek ke $cleanIp:$port: $errorMsg")
+                appendTerminalLog(LogLevel.ERROR, "Gagal konek ke $displayHost: $errorMsg")
             }
 
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
@@ -213,6 +241,16 @@ class LanBridgeClient(
         try {
             val json = JSONObject(text)
             when (json.optString("type")) {
+                "AUTH_SUCCESS" -> {
+                    appendTerminalLog(LogLevel.SUCCESS, "✓ Otentikasi PIN Berhasil! Akses Remote IDE Diizinkan.")
+                }
+                "AUTH_FAILED" -> {
+                    val errMsg = json.optString("message", "PIN tidak valid atau ditolak")
+                    appendTerminalLog(LogLevel.ERROR, "✕ Otentikasi Gagal: $errMsg")
+                    _connectionConfig.update {
+                        it.copy(status = ConnectionStatus.ERROR, errorMessage = errMsg)
+                    }
+                }
                 // 1. Telemetri CPU & RAM
                 "TELEMETRY" -> {
                     val cpu = if (json.has("cpuPercent")) json.getInt("cpuPercent") else (json.optDouble("cpuPercent", 0.0)).toInt()

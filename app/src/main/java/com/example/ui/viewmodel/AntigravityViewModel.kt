@@ -55,33 +55,34 @@ class AntigravityViewModel(
         _uiState.update { it.copy(targetPortInput = port) }
     }
 
-    fun connectToBridge() {
+    fun connectToBridge(pin: String? = null) {
         val ip = _uiState.value.targetIpInput.trim()
         val port = _uiState.value.targetPortInput.toIntOrNull() ?: 9876
-        repository.connect(ip, port)
+        repository.connect(ip, port, pin)
         _uiState.update { it.copy(showConnectionDialog = false) }
     }
 
     /**
      * Auto-Connect from QR Code Handshake
-     * Parses JSON { "ip": "...", "port": 9876 } or URI, connects immediately without extra clicks
+     * Parses JSON { "ip": "...", "port": 9876 } or Cloud { "url": "wss://...", "pin": "..." }
      */
     fun pairWithQrCode(qrPayload: String) {
         val parsed = QrHandshakeData.parse(qrPayload)
-        val host = parsed?.ip ?: "192.168.1.10"
+        val target = parsed?.wsUrl ?: (parsed?.ip ?: "192.168.1.10")
         val port = parsed?.port ?: 9876
+        val pin = parsed?.pin ?: parsed?.authToken
 
         _uiState.update {
             it.copy(
-                targetIpInput = host,
+                targetIpInput = target,
                 targetPortInput = port.toString(),
                 showQrScannerDialog = false,
                 showConnectionDialog = false,
-                pairingToastMessage = "Terhubung ke Antigravity IDE di $host:$port"
+                pairingToastMessage = if (parsed?.pin != null) "Terhubung via Cloudflare (PIN: ${parsed.pin})" else "Terhubung ke Antigravity IDE di $target"
             )
         }
 
-        repository.connect(host, port)
+        repository.connect(target, port, pin)
     }
 
     fun clearPairingToast() {

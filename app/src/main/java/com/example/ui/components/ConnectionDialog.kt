@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +33,7 @@ fun ConnectionDialog(
     history: List<String>,
     onIpChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
-    onConnect: () -> Unit,
+    onConnect: (String?) -> Unit,
     onScanQrClick: () -> Unit,
     onDisconnect: () -> Unit,
     onDemoMode: () -> Unit,
@@ -40,6 +41,7 @@ fun ConnectionDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
+        var pinInput by remember { mutableStateOf("") }
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -143,8 +145,8 @@ fun ConnectionDialog(
                     OutlinedTextField(
                         value = ipInput,
                         onValueChange = onIpChange,
-                        label = { Text("IP Address", fontSize = 12.sp) },
-                        placeholder = { Text("192.168.1.xxx") },
+                        label = { Text("IP / Domain Cloud", fontSize = 12.sp) },
+                        placeholder = { Text("192.168.1.x atau domain cloud") },
                         modifier = Modifier
                             .weight(1.8f)
                             .testTag("ip_input_field"),
@@ -174,6 +176,22 @@ fun ConnectionDialog(
                         )
                     )
                 }
+
+                // Optional Cloud Security PIN
+                OutlinedTextField(
+                    value = pinInput,
+                    onValueChange = { pinInput = it },
+                    label = { Text("PIN Keamanan Cloud (Opsional)", fontSize = 12.sp) },
+                    placeholder = { Text("6 Digit PIN (contoh: 739201)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentPrimary,
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = ContentPrimary,
+                        unfocusedTextColor = ContentPrimary
+                    )
+                )
 
                 // Quick Connect Presets
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -219,7 +237,7 @@ fun ConnectionDialog(
                 // Action Buttons
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = onConnect,
+                        onClick = { onConnect(pinInput.ifBlank { null }) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp)

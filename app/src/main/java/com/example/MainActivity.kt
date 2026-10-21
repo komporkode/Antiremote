@@ -267,7 +267,7 @@ fun AntigravityApp(
             history = uiState.connectionHistory,
             onIpChange = { viewModel.updateTargetIpInput(it) },
             onPortChange = { viewModel.updateTargetPortInput(it) },
-            onConnect = { viewModel.connectToBridge() },
+            onConnect = { pin -> viewModel.connectToBridge(pin) },
             onScanQrClick = { viewModel.showQrScanner(true) },
             onDisconnect = { viewModel.disconnect() },
             onDemoMode = { viewModel.startDemoSimulation() },
