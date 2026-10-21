@@ -39,193 +39,205 @@ fun TopHudBar(
             .fillMaxWidth()
             .testTag("top_hud_bar"),
         color = CardSurface,
-        tonalElevation = 3.dp,
+        tonalElevation = 2.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Row 1: Connection Status & Scan QR Button
+            // Row 1: App Title, Connection Status Pill & Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 val (statusColor, statusTitle) = when (config.status) {
-                    ConnectionStatus.CONNECTED -> AccentSuccess to "Connected"
-                    ConnectionStatus.CONNECTING -> AccentWarning to "Connecting"
-                    ConnectionStatus.ERROR -> AccentDanger to "Error"
-                    ConnectionStatus.DISCONNECTED -> ContentTertiary to "Disconnected"
+                    ConnectionStatus.CONNECTED -> AccentSuccess to "Tersambung"
+                    ConnectionStatus.CONNECTING -> AccentWarning to "Menghubungkan..."
+                    ConnectionStatus.ERROR -> AccentDanger to "Koneksi Terputus"
+                    ConnectionStatus.DISCONNECTED -> ContentTertiary to "Offline"
                 }
 
-                // Status chip with IP and Port
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onOpenConnectionDialog() }
-                        .testTag("connection_pill"),
-                    shape = RoundedCornerShape(8.dp),
-                    color = CardSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                // Left: App Name & Clickable Status Pill
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Text(
+                        text = "Antiremote",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = ContentPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        )
+                    )
+
+                    // Interactive Status Chip
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onOpenConnectionDialog() }
+                            .testTag("connection_pill"),
+                        shape = RoundedCornerShape(6.dp),
+                        color = CardSurfaceVariant
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(statusColor)
-                        )
-                        Text(
-                            text = "$statusTitle (${config.ipAddress}:${config.port})",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                color = ContentPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(statusColor)
                             )
-                        )
-                        if (config.isDemoMode) {
                             Text(
-                                text = "DEMO",
+                                text = "$statusTitle • ${config.ipAddress}:${config.port}",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = AccentWarning,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                    color = ContentSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             )
+                            if (config.isDemoMode) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = AccentWarning.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "DEMO",
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = AccentWarning,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                // 📷 Scan QR Button
-                Button(
-                    onClick = onScanQrClick,
-                    modifier = Modifier
-                        .height(34.dp)
-                        .testTag("btn_top_scan_qr"),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentPrimary.copy(alpha = 0.15f),
-                        contentColor = AccentPrimary
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.35f))
+                // Right: Scan QR & Save Buttons
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.QrCodeScanner,
-                        contentDescription = "Scan QR",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Scan QR",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                    // Save Button
+                    if (config.status == ConnectionStatus.CONNECTED) {
+                        FilledTonalButton(
+                            onClick = onSaveAllClick,
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("btn_top_save_all"),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = AccentSuccessSoft,
+                                contentColor = AccentSuccess
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Save,
+                                contentDescription = "Simpan",
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Simpan",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                    }
+
+                    // Scan QR Button
+                    FilledTonalButton(
+                        onClick = onScanQrClick,
+                        modifier = Modifier
+                            .height(34.dp)
+                            .testTag("btn_top_scan_qr"),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentPrimarySoft,
+                            contentColor = AccentPrimary
                         )
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.QrCodeScanner,
+                            contentDescription = "Scan QR",
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Scan QR",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
                 }
             }
 
-            HorizontalDivider(
-                color = CardBorder.copy(alpha = 0.5f),
-                thickness = 1.dp
-            )
-
-            // Row 2: WORKSPACE & EDITING status with [💾 Save] button
-            Row(
+            // Row 2: Clean breadcrumb showing active workspace & file
+            val projectName = workspaceInfo.projectName.ifEmpty { config.workspaceName.ifEmpty { "Workstation" } }
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                shape = RoundedCornerShape(8.dp),
+                color = CardSurfaceVariant.copy(alpha = 0.6f)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "WORKSPACE: ",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = ContentTertiary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        )
-                        Text(
-                            text = workspaceInfo.projectName.ifEmpty { config.workspaceName },
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = ContentPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "EDITING  : ",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = ContentTertiary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        )
-                        Text(
-                            text = "${workspaceInfo.activeFileName} (Baris ${workspaceInfo.cursorLine})",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = AccentPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        )
-                    }
-                }
-
-                // 💾 Save Button
-                Button(
-                    onClick = onSaveAllClick,
-                    modifier = Modifier
-                        .height(32.dp)
-                        .testTag("btn_top_save_all"),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentSuccess.copy(alpha = 0.15f),
-                        contentColor = AccentSuccess
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentSuccess.copy(alpha = 0.35f))
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Save,
-                        contentDescription = "Save All",
-                        modifier = Modifier.size(15.dp)
+                        imageVector = Icons.Outlined.FolderOpen,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = AccentPrimary
                     )
-                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = "Save",
-                        style = MaterialTheme.typography.labelMedium.copy(
+                        text = projectName,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = ContentPrimary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 11.sp
                         )
                     )
+
+                    if (workspaceInfo.activeFileName.isNotEmpty()) {
+                        Text(
+                            text = "›",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = ContentTertiary,
+                                fontSize = 11.sp
+                            )
+                        )
+                        Icon(
+                            imageVector = Icons.Outlined.Description,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
+                            tint = ContentSecondary
+                        )
+                        Text(
+                            text = "${workspaceInfo.activeFileName} (L:${workspaceInfo.cursorLine})",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = ContentSecondary,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
                 }
             }
         }

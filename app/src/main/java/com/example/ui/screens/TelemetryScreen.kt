@@ -74,7 +74,7 @@ fun TelemetryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // CPU Gauge Card
+                // CPU Usage Card
                 val cpuColor = when {
                     telemetry.cpuPercent > 80f -> AccentDanger
                     telemetry.cpuPercent > 50f -> AccentWarning
@@ -82,15 +82,15 @@ fun TelemetryScreen(
                 }
                 CleanMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "CPU Usage",
+                    title = "Beban CPU",
                     value = String.format("%.1f%%", telemetry.cpuPercent),
-                    subtitle = "${telemetry.platform} • 8-Core",
+                    subtitle = if (telemetry.cpuPercent > 70f) "Beban tinggi" else "Performa lancar",
                     icon = Icons.Outlined.Memory,
                     accentColor = cpuColor,
                     progress = (telemetry.cpuPercent / 100f).coerceIn(0f, 1f)
                 )
 
-                // RAM Gauge Card
+                // RAM Usage Card
                 val ramPercent = if (telemetry.memoryTotalMb > 0)
                     (telemetry.memoryUsedMb.toFloat() / telemetry.memoryTotalMb.toFloat())
                 else 0f
@@ -101,7 +101,7 @@ fun TelemetryScreen(
                 }
                 CleanMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "RAM Usage",
+                    title = "Memori RAM",
                     value = String.format("%.1f GB", telemetry.memoryUsedMb / 1024f),
                     subtitle = "dari ${String.format("%.1f GB", telemetry.memoryTotalMb / 1024f)} total",
                     icon = Icons.Outlined.Storage,
@@ -119,19 +119,19 @@ fun TelemetryScreen(
             ) {
                 CleanMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "Bridge Latency",
+                    title = "Latensi",
                     value = "${connectionConfig.pingMs} ms",
-                    subtitle = if (connectionConfig.status == ConnectionStatus.CONNECTED) "WebSocket Realtime" else "Offline",
+                    subtitle = if (connectionConfig.status == ConnectionStatus.CONNECTED) "Koneksi stabil" else "Offline",
                     icon = Icons.Outlined.Wifi,
                     accentColor = AccentSuccess
                 )
 
                 val hours = telemetry.uptimeSeconds / 3600
                 val mins = (telemetry.uptimeSeconds % 3600) / 60
-                val uptimeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m ${telemetry.uptimeSeconds % 60}s"
+                val uptimeStr = if (hours > 0) "${hours}j ${mins}m" else "${mins}m ${telemetry.uptimeSeconds % 60}d"
                 CleanMetricCard(
                     modifier = Modifier.weight(1f),
-                    title = "Uptime Server",
+                    title = "Waktu Aktif",
                     value = uptimeStr,
                     subtitle = "Port: ${connectionConfig.port}",
                     icon = Icons.Outlined.Schedule,
@@ -140,66 +140,66 @@ fun TelemetryScreen(
             }
         }
 
-        // 3. Tombol Pintasan Cepat (Quick Actions)
+        // 3. Tombol Aksi Cepat (Quick Actions)
         item {
             Text(
-                text = "Pintasan Cepat (Quick Actions)",
+                text = "Aksi Cepat",
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = ContentPrimary,
                     fontSize = 15.sp
                 )
             )
         }
 
-        // Row 1: Save All & npm run dev
+        // Row 1: Simpan Semua & Jalankan Dev
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 💾 Save All
-                Button(
+                // 💾 Simpan Semua
+                FilledTonalButton(
                     onClick = onSaveAll,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
                         .testTag("btn_quick_save_all"),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentSuccess,
-                        contentColor = Color.White
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AccentSuccessSoft,
+                        contentColor = AccentSuccess
                     )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Save,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Save All", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Simpan Semua", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
 
-                // 🚀 Run npm run dev
-                Button(
+                // 🚀 Jalankan Dev
+                FilledTonalButton(
                     onClick = onRunDev,
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
                         .testTag("btn_quick_npm_dev"),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentPrimary,
-                        contentColor = Color.White
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AccentPrimarySoft,
+                        contentColor = AccentPrimary
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.RocketLaunch,
+                        imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("npm run dev", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Jalankan Dev", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                 }
             }
         }
@@ -210,14 +210,14 @@ fun TelemetryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // 📦 Run npm run build
+                // 📦 Build
                 FilledTonalButton(
                     onClick = onRunBuild,
                     modifier = Modifier
                         .weight(1.2f)
                         .height(42.dp)
                         .testTag("btn_quick_npm_build"),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = CardSurfaceVariant,
                         contentColor = ContentPrimary
@@ -231,7 +231,7 @@ fun TelemetryScreen(
                         tint = AccentWarning
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("npm run build", fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                    Text("Build", fontWeight = FontWeight.Medium, fontSize = 12.sp)
                 }
 
                 // 🔄 Git Pull
@@ -241,7 +241,7 @@ fun TelemetryScreen(
                         .weight(1f)
                         .height(42.dp)
                         .testTag("btn_quick_git_pull"),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ContentSecondary),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
                 ) {
@@ -251,7 +251,7 @@ fun TelemetryScreen(
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Git Pull", fontSize = 11.sp)
+                    Text("Pull", fontSize = 11.sp)
                 }
 
                 // 🔄 Git Push
@@ -261,7 +261,7 @@ fun TelemetryScreen(
                         .weight(1f)
                         .height(42.dp)
                         .testTag("btn_quick_git_push"),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ContentSecondary),
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
                 ) {
@@ -271,17 +271,17 @@ fun TelemetryScreen(
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Git Push", fontSize = 11.sp)
+                    Text("Push", fontSize = 11.sp)
                 }
             }
         }
 
-        // 4. Terminal Remote Section
+        // 4. Log & Aktivitas Sistem
         item {
             Text(
-                text = "Terminal Remote Workstation",
+                text = "Log & Aktivitas Sistem",
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = ContentPrimary,
                     fontSize = 15.sp
                 ),
@@ -612,8 +612,7 @@ fun CleanMetricCard(
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     color = ContentPrimary,
-                    fontSize = 17.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontSize = 18.sp
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -1,9 +1,9 @@
 package com.example.ui.viewmodel
 
 enum class DashboardTab(val label: String) {
-    CHAT("Agent Chat"),
+    CHAT("Chat"),
     FILES("Files"),
-    TELEMETRY("Telemetry")
+    TELEMETRY("Dashboard")
 }
 
 enum class LogFilter(val label: String) {

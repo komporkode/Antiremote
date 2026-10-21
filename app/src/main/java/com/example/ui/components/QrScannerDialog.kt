@@ -433,7 +433,7 @@ fun QrScannerDialog(
                         OutlinedTextField(
                             value = manualPayloadInput,
                             onValueChange = { manualPayloadInput = it },
-                            placeholder = { Text("192.168.1.10:8080 atau JSON...", fontSize = 11.sp) },
+                            placeholder = { Text("192.168.1.10:9876 atau JSON...", fontSize = 11.sp) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),

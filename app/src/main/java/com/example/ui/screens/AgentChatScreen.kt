@@ -69,7 +69,7 @@ fun AgentChatScreen(
         "🔥 /grill-me" to "/grill-me ",
         "💡 /learn" to "/learn ",
         "🛠️ /fix" to "/fix ",
-        "⚡ /review" to "/review "
+        "🔍 /review" to "/review "
     )
 
     Column(
@@ -78,7 +78,7 @@ fun AgentChatScreen(
             .background(AppBg)
             .testTag("agent_chat_screen")
     ) {
-        // Antigravity IDE Realtime Mirror Status Bar
+        // Antigravity IDE Realtime Status Bar
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = CardSurface,
@@ -87,7 +87,7 @@ fun AgentChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -102,7 +102,7 @@ fun AgentChatScreen(
                             .background(AccentSuccess)
                     )
                     Text(
-                        text = "Antigravity IDE Live Chat Mirror",
+                        text = "Sinkronisasi Antigravity IDE",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = ContentSecondary,
                             fontSize = 11.sp,
@@ -111,11 +111,10 @@ fun AgentChatScreen(
                     )
                 }
                 Text(
-                    text = "${messages.size} pesan tersinkron",
+                    text = "${messages.size} pesan",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = ContentTertiary,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontSize = 11.sp
                     )
                 )
             }
@@ -211,7 +210,7 @@ fun AgentChatScreen(
                             strokeWidth = 2.dp
                         )
                         Text(
-                            text = activeToolBadge ?: "Agent sedang streaming token & berpikir...",
+                            text = activeToolBadge ?: "AI sedang merespons...",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = ContentPrimary,
                                 fontSize = 12.sp,
@@ -221,29 +220,29 @@ fun AgentChatScreen(
                         )
                     }
 
-                    // ⏹️ Emergency STOP / CANCEL Button
-                    Button(
+                    // Stop Streaming Button
+                    FilledTonalButton(
                         onClick = onCancelAgent,
                         modifier = Modifier
-                            .height(34.dp)
+                            .height(32.dp)
                             .testTag("btn_agent_cancel_emergency"),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentDanger,
-                            contentColor = Color.White
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentDangerSoft,
+                            contentColor = AccentDanger
                         )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop Agent",
-                            modifier = Modifier.size(16.dp)
+                            contentDescription = "Hentikan",
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "STOP",
+                            text = "Berhenti",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp
                             )
                         )

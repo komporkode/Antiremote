@@ -95,9 +95,9 @@ fun AntigravityApp(
                 DashboardTab.values().forEach { tab ->
                     val isSelected = uiState.selectedTab == tab
                     val (icon, label) = when (tab) {
-                        DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Agent Chat"
+                        DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
                         DashboardTab.FILES -> (if (isSelected) Icons.Filled.Folder else Icons.Outlined.Folder) to "Files"
-                        DashboardTab.TELEMETRY -> (if (isSelected) Icons.Filled.Speed else Icons.Outlined.Speed) to "Telemetry"
+                        DashboardTab.TELEMETRY -> (if (isSelected) Icons.Filled.Dashboard else Icons.Outlined.Dashboard) to "Dashboard"
                     }
 
                     NavigationBarItem(

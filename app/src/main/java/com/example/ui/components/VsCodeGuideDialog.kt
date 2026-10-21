@@ -30,7 +30,7 @@ fun VsCodeGuideDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val bridgeCommand = "npx @google/antigravity-bridge"
+    val bridgeCommand = "npx @google/antigravity-bridge (atau via Extension Antigravity Remote)"
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -158,8 +158,8 @@ fun VsCodeGuideDialog(
                 // Step 3
                 GuideStepItem(
                     stepNumber = "3",
-                    title = "Scan QR Code yang Muncul di Layar",
-                    description = "QR Code terminal atau sidebar akan otomatis terdeteksi oleh aplikasi ini dan langsung tersambung tanpa ketik IP."
+                    title = "Scan QR Code Pairing di Layar",
+                    description = "Klik tombol 'Antigravity Remote' di Status Bar IDE atau jalankan command palette (Ctrl+Shift+P > 'Buka QR Code Pairing'), lalu scan."
                 )
 
                 Button(

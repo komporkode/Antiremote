@@ -27,8 +27,8 @@ fun CircularTelemetryGauge(
     title: String,
     unit: String,
     modifier: Modifier = Modifier,
-    accentColor: Color = NeonCyan,
-    secondaryColor: Color = NeonMint
+    accentColor: Color = AccentPrimary,
+    secondaryColor: Color = AccentSuccess
 ) {
     val progress = (value / maxValue).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(

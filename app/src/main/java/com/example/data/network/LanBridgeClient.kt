@@ -290,11 +290,16 @@ class LanBridgeClient(
                 "USER_CHAT_MESSAGE", "USER_PROMPT" -> {
                     val prompt = json.optString("prompt", json.optString("text", ""))
                     if (prompt.isNotEmpty()) {
-                        _chatMessages.update {
-                            it + AgentChatMessage(
-                                sender = ChatSender.USER,
-                                text = prompt
-                            )
+                        _chatMessages.update { list ->
+                            // Cegah duplikasi jika bubble terakhir sudah persis pesan ini (dikirim dari HP ini)
+                            if (list.isNotEmpty() && list.last().sender == ChatSender.USER && list.last().text == prompt) {
+                                list
+                            } else {
+                                list + AgentChatMessage(
+                                    sender = ChatSender.USER,
+                                    text = prompt
+                                )
+                            }
                         }
                     }
                 }
@@ -313,6 +318,36 @@ class LanBridgeClient(
                             )
                         }
                     }
+                }
+
+                // 11. AGENT ERROR DARI WORKSTATION
+                "AGENT_ERROR" -> {
+                    val errorMsg = json.optString("message", "Terjadi kesalahan pada AI Agent")
+                    _isAgentStreaming.value = false
+                    _agentToolBadge.value = null
+                    _chatMessages.update { list ->
+                        if (list.isNotEmpty() && list.last().sender == ChatSender.AGENT && list.last().isStreaming) {
+                            val last = list.last()
+                            val prefix = if (last.text.isNotEmpty()) "\n\n" else ""
+                            list.dropLast(1) + last.copy(
+                                text = (last.text + prefix + "⚠️ [Agent Error]: " + errorMsg).trim(),
+                                isStreaming = false,
+                                toolBadge = null
+                            )
+                        } else {
+                            list + AgentChatMessage(
+                                sender = ChatSender.SYSTEM,
+                                text = "⚠️ [Agent Error]: " + errorMsg
+                            )
+                        }
+                    }
+                    appendTerminalLog(LogLevel.ERROR, "[Agent Error]: " + errorMsg)
+                }
+
+                // 12. NOTIFIKASI BERKAS TERSIMPAN
+                "FILE_SAVED" -> {
+                    val path = json.optString("relativePath", "berkas")
+                    appendTerminalLog(LogLevel.SUCCESS, "Berkas '" + path + "' berhasil disimpan di workstation.")
                 }
 
                 // Fallbacks & Previous Commands
@@ -478,7 +513,7 @@ class LanBridgeClient(
         var socketDelivered = false
 
         if (webSocket != null && !_connectionConfig.value.isDemoMode) {
-            // A. AGENT_STREAM_PROMPT: Format streaming modern (User Prompt #1)
+            // A. AGENT_STREAM_PROMPT:• Format streaming modern (User Prompt #1)
             // Dilengkapi seluruh variasi field (prompt, command, message, text, content, data)
             val streamPayload = JSONObject().apply {
                 put("type", "AGENT_STREAM_PROMPT")
@@ -504,7 +539,7 @@ class LanBridgeClient(
             }
             val res1 = webSocket?.send(streamPayload.toString()) ?: false
 
-            // B. ANTIGRAVITY_COMMAND: Format resmi spesifikasi Antigravity Bridge (TECHNICAL_SPEC_d402e019.md)
+            // B. ANTIGRAVITY_COMMAND:• Format resmi spesifikasi Antigravity Bridge (TECHNICAL_SPEC_d402e019.md)
             // Backend Antigravity Bridge di PC mengeksekusi 'agy <command>' di terminal khusus
             val agyPayload = JSONObject().apply {
                 put("type", "ANTIGRAVITY_COMMAND")
@@ -515,7 +550,7 @@ class LanBridgeClient(
             }
             val res2 = webSocket?.send(agyPayload.toString()) ?: false
 
-            // C. USER_CHAT_MESSAGE: Format sinkronisasi dua arah chat Antigravity IDE
+            // C. USER_CHAT_MESSAGE:• Format sinkronisasi dua arah chat Antigravity IDE
             val userChatPayload = JSONObject().apply {
                 put("type", "USER_CHAT_MESSAGE")
                 put("prompt", trimmed)
