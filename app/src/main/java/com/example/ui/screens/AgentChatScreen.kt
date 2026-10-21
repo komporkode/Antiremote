@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
@@ -55,6 +60,31 @@ fun AgentChatScreen(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                val updated = if (inputPrompt.isBlank()) spokenText else "$inputPrompt $spokenText"
+                onInputChange(updated)
+            }
+        }
+    }
+
+    val startVoiceInput = {
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Bicara instruksi untuk AI Agent...")
+            }
+            speechRecognizerLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Voice input tidak didukung di perangkat ini", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Auto-scroll to bottom saat potongan teks baru masuk (streaming chunk)
     LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length, activeToolBadge) {
@@ -400,6 +430,24 @@ fun AgentChatScreen(
                         }
                     })
                 )
+
+                FilledTonalIconButton(
+                    onClick = startVoiceInput,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .testTag("btn_voice_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = CardSurfaceVariant,
+                        contentColor = AccentPrimary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Mic,
+                        contentDescription = "Dikte Suara",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
                 FilledIconButton(
                     onClick = {

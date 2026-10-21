@@ -5,7 +5,7 @@ import com.example.data.network.LanBridgeClient
 import kotlinx.coroutines.flow.StateFlow
 
 class AntigravityRepository(
-    private val client: LanBridgeClient = LanBridgeClient()
+    private val client: LanBridgeClient = LanBridgeClient.getInstance()
 ) {
     val connectionConfig: StateFlow<ConnectionConfig> = client.connectionConfig
     val telemetry: StateFlow<SystemTelemetry> = client.telemetry
@@ -26,6 +26,9 @@ class AntigravityRepository(
     val pendingApproval: StateFlow<AgentApprovalRequest?> = client.pendingApproval
     val workspaceDiffs: StateFlow<List<FileDiff>> = client.workspaceDiffs
     val conversationSessions: StateFlow<List<ConversationSession>> = client.conversationSessions
+
+    // Live Interactive Terminal
+    val liveTerminalOutput: StateFlow<String> = client.liveTerminalOutput
 
     fun connect(ip: String, port: Int = 9876) = client.connect(ip, port)
     fun disconnect() = client.disconnect()
@@ -52,4 +55,10 @@ class AntigravityRepository(
     fun requestWorkspaceDiffs() = client.requestWorkspaceDiffs()
     fun startNewConversation() = client.startNewConversation()
     fun switchConversation(sessionId: String) = client.switchConversation(sessionId)
+
+    // Interactive Terminal
+    fun requestTerminalBuffer() = client.requestTerminalBuffer()
+    fun sendLiveTerminalInput(input: String) = client.sendLiveTerminalInput(input)
+    fun sendTerminalInterrupt() = client.sendTerminalInterrupt()
+    fun clearLiveTerminal() = client.clearLiveTerminal()
 }

@@ -1,10 +1,13 @@
 package com.example
 
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -21,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.model.ConnectionStatus
+import com.example.service.BridgeNotificationService
 import com.example.ui.components.ConnectionDialog
 import com.example.ui.components.QrScannerDialog
 import com.example.ui.components.TopHudBar
@@ -60,6 +65,30 @@ fun AntigravityApp(
     val pendingApproval by viewModel.pendingApproval.collectAsStateWithLifecycle()
     val workspaceDiffs by viewModel.workspaceDiffs.collectAsStateWithLifecycle()
     val conversationSessions by viewModel.conversationSessions.collectAsStateWithLifecycle()
+    val liveTerminalOutput by viewModel.liveTerminalOutput.collectAsStateWithLifecycle()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.POST_NOTIFICATIONS,
+                    android.Manifest.permission.RECORD_AUDIO
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(config.status) {
+        if (config.status == ConnectionStatus.CONNECTED) {
+            BridgeNotificationService.start(context)
+        } else if (config.status == ConnectionStatus.DISCONNECTED || config.status == ConnectionStatus.ERROR) {
+            BridgeNotificationService.stop(context)
+        }
+    }
 
     // Show toast on pairing success
     LaunchedEffect(uiState.pairingToastMessage) {
@@ -87,7 +116,7 @@ fun AntigravityApp(
             )
         },
         bottomBar = {
-            // 3-Tab Bottom Navigation Bar (Linear Style)
+            // 4-Tab Bottom Navigation Bar (Linear Style)
             NavigationBar(
                 modifier = Modifier
                     .testTag("bottom_navigation_bar")
@@ -101,6 +130,7 @@ fun AntigravityApp(
                         DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
                         DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
                         DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
+                        DashboardTab.TERMINAL -> (if (isSelected) Icons.Filled.Terminal else Icons.Outlined.Terminal) to "Terminal"
                     }
 
                     NavigationBarItem(
@@ -209,6 +239,19 @@ fun AntigravityApp(
                             Toast.makeText(context, "Menjalankan git push di Workstation", Toast.LENGTH_SHORT).show()
                         },
                         terminalLogs = terminalLogs
+                    )
+                }
+
+                // Tab 4: 💻 Interactive Live Terminal (Bidirectional Shell)
+                DashboardTab.TERMINAL -> {
+                    LaunchedEffect(Unit) {
+                        viewModel.requestTerminalBuffer()
+                    }
+                    LiveTerminalScreen(
+                        output = liveTerminalOutput,
+                        onSendInput = { viewModel.sendLiveTerminalInput(it) },
+                        onInterrupt = { viewModel.sendTerminalInterrupt() },
+                        onClear = { viewModel.clearLiveTerminal() }
                     )
                 }
             }

@@ -14,6 +14,17 @@ import kotlin.random.Random
 class LanBridgeClient(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) {
+    companion object {
+        @Volatile
+        private var instance: LanBridgeClient? = null
+
+        fun getInstance(): LanBridgeClient {
+            return instance ?: synchronized(this) {
+                instance ?: LanBridgeClient().also { instance = it }
+            }
+        }
+    }
+
     private val okHttpClient = OkHttpClient.Builder()
         .pingInterval(5, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
@@ -97,6 +108,10 @@ class LanBridgeClient(
     // 3. Multi-Session & Conversation History State
     private val _conversationSessions = MutableStateFlow<List<ConversationSession>>(createInitialSessions())
     val conversationSessions: StateFlow<List<ConversationSession>> = _conversationSessions.asStateFlow()
+    // 4. Interactive Live Terminal Output Stream
+    private val _liveTerminalOutput = MutableStateFlow<String>("")
+    val liveTerminalOutput: StateFlow<String> = _liveTerminalOutput.asStateFlow()
+
 
     init {
         appendTerminalLog(LogLevel.INFO, "Antigravity Remote Client siap (Port Default: 9876). Scan QR atau hubungkan.")
@@ -403,6 +418,19 @@ class LanBridgeClient(
                 }
 
                 // 14. DATA REVIEW & DIFFS PERUBAHAN BERKAS
+                
+                // Live Interactive Terminal
+                "TERMINAL_OUTPUT" -> {
+                    val data = json.optString("data", "")
+                    if (data.isNotEmpty()) {
+                        _liveTerminalOutput.update { (it + data).takeLast(100000) }
+                    }
+                }
+
+                "TERMINAL_CLEARED" -> {
+                    _liveTerminalOutput.value = ""
+                }
+
                 "WORKSPACE_DIFFS", "GIT_DIFFS" -> {
                     val filesArr = json.optJSONArray("files")
                     if (filesArr != null) {
@@ -742,6 +770,52 @@ class LanBridgeClient(
     /**
      * Sends raw terminal shell command
      */
+
+    fun requestTerminalBuffer() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "GET_TERMINAL_BUFFER")
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    fun sendLiveTerminalInput(input: String) {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "TERMINAL_INPUT")
+                put("input", input)
+            }
+            webSocket?.send(payload.toString())
+        } else if (_connectionConfig.value.isDemoMode) {
+            _liveTerminalOutput.update { it + input }
+            if (input.endsWith("\n") || input.endsWith("\r")) {
+                val cmd = input.trim()
+            _liveTerminalOutput.update { it + "simulated: " + cmd + "\n" }
+            }
+        }
+    }
+
+    fun sendTerminalInterrupt() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "TERMINAL_INTERRUPT")
+            }
+            webSocket?.send(payload.toString())
+        }
+        _liveTerminalOutput.update { it + "^C\n" }
+    }
+
+    fun clearLiveTerminal() {
+        _liveTerminalOutput.value = ""
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "TERMINAL_CLEAR")
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
     fun sendTerminalCommand(command: String) {
         val trimmed = command.trim()
         if (trimmed.isEmpty()) return

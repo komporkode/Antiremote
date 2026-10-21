@@ -3,7 +3,8 @@ package com.example.ui.viewmodel
 enum class DashboardTab(val label: String) {
     CHAT("Chat"),
     REVIEW("Review"),
-    TASKS("Tasks")
+    TASKS("Tasks"),
+    TERMINAL("Terminal")
 }
 
 enum class LogFilter(val label: String) {

@@ -245,4 +245,11 @@ class AntigravityViewModel(
     fun switchConversation(sessionId: String) {
         repository.switchConversation(sessionId)
     }
+
+    // Live Interactive Terminal
+    val liveTerminalOutput: StateFlow<String> = repository.liveTerminalOutput
+    fun requestTerminalBuffer() = repository.requestTerminalBuffer()
+    fun sendLiveTerminalInput(input: String) = repository.sendLiveTerminalInput(input)
+    fun sendTerminalInterrupt() = repository.sendTerminalInterrupt()
+    fun clearLiveTerminal() = repository.clearLiveTerminal()
 }
