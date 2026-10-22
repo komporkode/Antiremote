@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 enum class DashboardTab(val label: String) {
     CHAT("Chat"),
     REVIEW("Review"),
+    PREVIEW("Preview"),
     TASKS("Tasks"),
     TERMINAL("Terminal")
 }
@@ -31,6 +32,7 @@ data class AntigravityUiState(
     val selectedFilePath: String = "src/App.tsx",
     val isEditingCurrentFile: Boolean = false,
     val currentFileDraftContent: String = "",
+    val selectedPreviewUrl: String? = null,
     val agentPromptInput: String = "",
     val pairingToastMessage: String? = null,
     val connectionHistory: List<String> = listOf(

@@ -36,6 +36,8 @@ fun TasksScreen(
     onGitPull: () -> Unit,
     onGitPush: () -> Unit,
     terminalLogs: List<TerminalLog>,
+    workspaceScripts: List<WorkspaceScript> = emptyList(),
+    onRunScript: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showLogs by remember { mutableStateOf(false) }
@@ -218,7 +220,7 @@ fun TasksScreen(
                                 )
                             }
                             Text(
-                                text = session.title,
+                                text = session.title.ifEmpty { "Sesi ${session.id.take(8)}" },
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     color = if (session.isActive) ContentPrimary else ContentSecondary,
                                     fontWeight = if (session.isActive) FontWeight.Bold else FontWeight.Medium,
@@ -315,6 +317,111 @@ fun TasksScreen(
                     onClick = onGitPush,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+
+        // Section 3b: Dynamic Workspace Scripts (from package.json & tasks.json)
+        if (workspaceScripts.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayCircleOutline,
+                        contentDescription = null,
+                        tint = AccentPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Script Workspace Terdeteksi (${workspaceScripts.size})",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            color = ContentPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    )
+                }
+            }
+
+            items(workspaceScripts, key = { it.name + it.command }) { script ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onRunScript(script.command) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (script.source == "package.json") Icons.Default.Terminal else Icons.Default.Task,
+                                contentDescription = null,
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = script.name,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentPrimary,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp
+                                    )
+                                )
+                                Text(
+                                    text = script.command,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentTertiary,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp
+                                    ),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = CardSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Jalankan",
+                                    tint = AccentSuccess,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "Run",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = AccentSuccess,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 

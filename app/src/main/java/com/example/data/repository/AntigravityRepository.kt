@@ -30,6 +30,10 @@ class AntigravityRepository(
     // Live Interactive Terminal
     val liveTerminalOutput: StateFlow<String> = client.liveTerminalOutput
 
+    // Active Dev Servers & Workspace Scripts
+    val activeDevServers: StateFlow<List<ActiveDevServer>> = client.activeDevServers
+    val workspaceScripts: StateFlow<List<WorkspaceScript>> = client.workspaceScripts
+
     fun connect(ip: String, port: Int = 9876, pin: String? = null) = client.connect(ip, port, pin)
     fun initStorage(context: android.content.Context) = client.initPreferences(context)
     fun getLastSavedConnection() = client.getLastSavedConnection()
@@ -63,4 +67,12 @@ class AntigravityRepository(
     fun sendLiveTerminalInput(input: String) = client.sendLiveTerminalInput(input)
     fun sendTerminalInterrupt() = client.sendTerminalInterrupt()
     fun clearLiveTerminal() = client.clearLiveTerminal()
+
+    // Dev Servers & Scripts
+    fun requestDevServers() = client.requestDevServers()
+    fun requestWorkspaceScripts() = client.requestWorkspaceScripts()
+    fun killPort(port: Int) = client.killPort(port)
+    fun runWorkspaceScript(command: String) = client.runWorkspaceScript(command)
+    fun requestDevTunnel(port: Int) = client.requestDevTunnel(port)
+    fun stopDevTunnel(port: Int) = client.stopDevTunnel(port)
 }

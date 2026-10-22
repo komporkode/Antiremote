@@ -85,11 +85,15 @@ fun AntigravityApp(
     val isAgentStreaming by viewModel.isAgentStreaming.collectAsStateWithLifecycle()
     val agentToolBadge by viewModel.agentToolBadge.collectAsStateWithLifecycle()
 
-    // New Linear Minimalist features
+    // Linear Minimalist features
     val pendingApproval by viewModel.pendingApproval.collectAsStateWithLifecycle()
     val workspaceDiffs by viewModel.workspaceDiffs.collectAsStateWithLifecycle()
     val conversationSessions by viewModel.conversationSessions.collectAsStateWithLifecycle()
     val liveTerminalOutput by viewModel.liveTerminalOutput.collectAsStateWithLifecycle()
+
+    // Dev Servers (Live Preview) & Workspace Scripts
+    val activeDevServers by viewModel.activeDevServers.collectAsStateWithLifecycle()
+    val workspaceScripts by viewModel.workspaceScripts.collectAsStateWithLifecycle()
 
     var isKeepScreenOn by remember { mutableStateOf(false) }
 
@@ -183,7 +187,7 @@ fun AntigravityApp(
             )
         },
         bottomBar = {
-            // 4-Tab Bottom Navigation Bar (Linear Style)
+            // 5-Tab Bottom Navigation Bar (Linear Style)
             NavigationBar(
                 modifier = Modifier
                     .testTag("bottom_navigation_bar")
@@ -198,6 +202,7 @@ fun AntigravityApp(
                         DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
                         DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
                         DashboardTab.TERMINAL -> (if (isSelected) Icons.Filled.Terminal else Icons.Outlined.Terminal) to "Terminal"
+                        DashboardTab.PREVIEW -> (if (isSelected) Icons.Filled.Language else Icons.Outlined.Language) to "Preview"
                     }
 
                     NavigationBarItem(
@@ -205,7 +210,26 @@ fun AntigravityApp(
                         onClick = { viewModel.selectTab(tab) },
                         modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"),
                         icon = {
-                            if (tab == DashboardTab.REVIEW && workspaceDiffs.isNotEmpty()) {
+                            if (tab == DashboardTab.PREVIEW && activeDevServers.isNotEmpty()) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = AccentSuccess,
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = activeDevServers.size.toString(),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label
+                                    )
+                                }
+                            } else if (tab == DashboardTab.REVIEW && workspaceDiffs.isNotEmpty()) {
                                 BadgedBox(
                                     badge = {
                                         Badge(
@@ -236,7 +260,7 @@ fun AntigravityApp(
                                 text = label,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    fontSize = 11.sp
+                                    fontSize = 10.sp
                                 )
                             )
                         },
@@ -259,7 +283,7 @@ fun AntigravityApp(
                 .background(AppBg)
         ) {
             when (uiState.selectedTab) {
-                // Tab 1: 💬 AI Agent Live Chat & Human-in-the-Loop Approvals
+                // Tab 1: AI Agent Live Chat & Human-in-the-Loop Approvals
                 DashboardTab.CHAT -> {
                     AgentChatScreen(
                         messages = chatMessages,
@@ -277,7 +301,7 @@ fun AntigravityApp(
                     )
                 }
 
-                // Tab 2: 🔍 Code Review & Unified Diff Viewer
+                // Tab 2: Code Review & Unified Diff Viewer
                 DashboardTab.REVIEW -> {
                     ReviewDiffScreen(
                         diffs = workspaceDiffs,
@@ -293,7 +317,7 @@ fun AntigravityApp(
                     )
                 }
 
-                // Tab 3: 📋 Tasks, Multi-Session & Developer Shortcuts
+                // Tab 3: Tasks, Multi-Session & Developer Shortcuts
                 DashboardTab.TASKS -> {
                     TasksScreen(
                         agentTask = agentTask,
@@ -326,11 +350,16 @@ fun AntigravityApp(
                             viewModel.triggerGitPush()
                             Toast.makeText(context, "Menjalankan git push di Workstation", Toast.LENGTH_SHORT).show()
                         },
-                        terminalLogs = terminalLogs
+                        terminalLogs = terminalLogs,
+                        workspaceScripts = workspaceScripts,
+                        onRunScript = { cmd ->
+                            viewModel.runWorkspaceScript(cmd)
+                            Toast.makeText(context, "Menjalankan '$cmd' di Workstation", Toast.LENGTH_SHORT).show()
+                        }
                     )
                 }
 
-                // Tab 4: 💻 Interactive Live Terminal (Bidirectional Shell)
+                // Tab 4: Interactive Live Terminal (Bidirectional Shell)
                 DashboardTab.TERMINAL -> {
                     LaunchedEffect(Unit) {
                         viewModel.requestTerminalBuffer()
@@ -343,6 +372,44 @@ fun AntigravityApp(
                         onRequestAiFix = { prompt ->
                             viewModel.updateChatInput(prompt)
                             viewModel.selectTab(DashboardTab.CHAT)
+                        }
+                    )
+                }
+
+                // Tab 5: In-App Live Dev Preview & Test
+                DashboardTab.PREVIEW -> {
+                    val isCloud = config.ipAddress.contains("trycloudflare.com") || config.ipAddress.startsWith("wss://")
+                    AppPreviewScreen(
+                        activeServers = activeDevServers,
+                        selectedUrl = uiState.selectedPreviewUrl,
+                        bridgeHost = config.ipAddress,
+                        isCloudConnection = isCloud,
+                        onSelectUrl = { viewModel.selectPreviewUrl(it) },
+                        onRefreshServers = { viewModel.requestDevServers() },
+                        onTriggerHotReload = {
+                            viewModel.triggerHotReload()
+                            Toast.makeText(context, "Hot reload ('r') dikirim ke dev server", Toast.LENGTH_SHORT).show()
+                        },
+                        onKillPort = { port ->
+                            viewModel.killPort(port)
+                            Toast.makeText(context, "Mematikan server di port $port...", Toast.LENGTH_SHORT).show()
+                        },
+                        onRequestDevTunnel = { port ->
+                            viewModel.requestDevTunnel(port)
+                            Toast.makeText(context, "Membuka Cloudflare Tunnel untuk port $port...", Toast.LENGTH_SHORT).show()
+                        },
+                        onStopDevTunnel = { port ->
+                            viewModel.stopDevTunnel(port)
+                            Toast.makeText(context, "Menutup Cloudflare Tunnel untuk port $port...", Toast.LENGTH_SHORT).show()
+                        },
+                        onRequestAiFix = { prompt ->
+                            viewModel.updateChatInput(prompt)
+                            viewModel.selectTab(DashboardTab.CHAT)
+                        },
+                        workspaceScripts = workspaceScripts,
+                        onRunScript = { cmd ->
+                            viewModel.runWorkspaceScript(cmd)
+                            Toast.makeText(context, "Menjalankan '$cmd' di Workstation", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

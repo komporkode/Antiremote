@@ -32,8 +32,15 @@ class AntigravityViewModel(
     val workspaceDiffs: StateFlow<List<FileDiff>> = repository.workspaceDiffs
     val conversationSessions: StateFlow<List<ConversationSession>> = repository.conversationSessions
 
+    // Active Dev Servers (In-App Preview) & Workspace Quick Scripts
+    val activeDevServers: StateFlow<List<ActiveDevServer>> = repository.activeDevServers
+    val workspaceScripts: StateFlow<List<WorkspaceScript>> = repository.workspaceScripts
+
     fun selectTab(tab: DashboardTab) {
         _uiState.update { it.copy(selectedTab = tab) }
+        if (tab == DashboardTab.PREVIEW) {
+            requestDevServers()
+        }
     }
 
     fun showConnectionDialog(show: Boolean) {
@@ -283,4 +290,24 @@ class AntigravityViewModel(
     fun sendLiveTerminalInput(input: String) = repository.sendLiveTerminalInput(input)
     fun sendTerminalInterrupt() = repository.sendTerminalInterrupt()
     fun clearLiveTerminal() = repository.clearLiveTerminal()
+
+    // ==========================================
+    // TAB 5: ACTIVE DEV SERVERS & LIVE PREVIEW
+    // ==========================================
+
+    fun requestDevServers() = repository.requestDevServers()
+    fun requestWorkspaceScripts() = repository.requestWorkspaceScripts()
+    fun killPort(port: Int) = repository.killPort(port)
+    fun runWorkspaceScript(command: String) = repository.runWorkspaceScript(command)
+
+    fun selectPreviewUrl(url: String?) {
+        _uiState.update { it.copy(selectedPreviewUrl = url) }
+    }
+
+    fun triggerHotReload() {
+        repository.sendLiveTerminalInput("r")
+    }
+
+    fun requestDevTunnel(port: Int) = repository.requestDevTunnel(port)
+    fun stopDevTunnel(port: Int) = repository.stopDevTunnel(port)
 }

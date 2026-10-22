@@ -119,6 +119,13 @@ class LanBridgeClient(
     private val _liveTerminalOutput = MutableStateFlow<String>("")
     val liveTerminalOutput: StateFlow<String> = _liveTerminalOutput.asStateFlow()
 
+    // 5. Active Local Dev Servers & Workspace Scripts
+    private val _activeDevServers = MutableStateFlow<List<ActiveDevServer>>(emptyList())
+    val activeDevServers: StateFlow<List<ActiveDevServer>> = _activeDevServers.asStateFlow()
+
+    private val _workspaceScripts = MutableStateFlow<List<WorkspaceScript>>(emptyList())
+    val workspaceScripts: StateFlow<List<WorkspaceScript>> = _workspaceScripts.asStateFlow()
+
 
     init {
         appendTerminalLog(LogLevel.INFO, "Antigravity Remote Client siap (Port Default: 9876). Scan QR atau hubungkan.")
@@ -238,10 +245,12 @@ class LanBridgeClient(
                     appendTerminalLog(LogLevel.INFO, "Mengirim PIN otentikasi keamanan...")
                 }
 
-                // Auto fetch workspace info, files, and chat history on handshake
+                // Auto fetch workspace info, files, chat history, scripts, and dev servers on handshake
                 requestWorkspaceInfo()
                 requestWorkspaceFiles()
                 requestChatHistory()
+                requestWorkspaceScripts()
+                requestDevServers()
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -378,6 +387,100 @@ class LanBridgeClient(
                     val fileName = activeFile?.optString("name") ?: json.optString("activeDocument", _workspaceInfo.value.activeFileName)
                     val line = activeFile?.optInt("cursorLine") ?: _workspaceInfo.value.cursorLine
                     updateWorkspaceHeader(projectName, fileName, line)
+
+                    val scriptsArr = data?.optJSONArray("scripts")
+                    if (scriptsArr != null) {
+                        val sList = mutableListOf<WorkspaceScript>()
+                        for (i in 0 until scriptsArr.length()) {
+                            val sObj = scriptsArr.getJSONObject(i)
+                            sList.add(
+                                WorkspaceScript(
+                                    name = sObj.optString("name", ""),
+                                    command = sObj.optString("command", ""),
+                                    source = sObj.optString("source", "package.json")
+                                )
+                            )
+                        }
+                        if (sList.isNotEmpty()) {
+                            _workspaceScripts.value = sList
+                        }
+                    }
+                }
+
+                // 5b. ACTIVE DEV SERVERS (UNTUK LIVE PREVIEW DI HP)
+                "DEV_SERVERS" -> {
+                    val arr = json.optJSONArray("servers")
+                    val sList = mutableListOf<ActiveDevServer>()
+                    val currentHost = _connectionConfig.value.ipAddress
+                    if (arr != null) {
+                        for (i in 0 until arr.length()) {
+                            val item = arr.getJSONObject(i)
+                            val port = item.optInt("port", 0)
+                            val localUrl = item.optString("localUrl", "http://localhost:$port")
+                            var lanUrl = item.optString("lanUrl", "")
+                            val cloudUrl = item.optString("cloudUrl", "").takeIf { it.isNotBlank() }
+
+                            // Utamakan IP Network Workstation jika lanUrl kosong atau masih localhost
+                            if (lanUrl.isBlank() || lanUrl.contains("localhost") || lanUrl.contains("127.0.0.1")) {
+                                if (currentHost.isNotBlank() && currentHost != "localhost" && currentHost != "127.0.0.1" && !currentHost.contains("trycloudflare.com")) {
+                                    lanUrl = "http://$currentHost:$port"
+                                }
+                            }
+
+                            sList.add(
+                                ActiveDevServer(
+                                    port = port,
+                                    pid = item.optInt("pid", 0),
+                                    processName = item.optString("processName", ""),
+                                    localUrl = localUrl,
+                                    lanUrl = lanUrl,
+                                    isCommonDevPort = item.optBoolean("isCommonDevPort", true),
+                                    cloudUrl = cloudUrl
+                                )
+                            )
+                        }
+                    }
+                    _activeDevServers.value = sList
+                }
+
+                "DEV_TUNNEL_READY" -> {
+                    val port = json.optInt("port", 0)
+                    val url = json.optString("url", "")
+                    if (port > 0 && url.isNotBlank()) {
+                        _activeDevServers.update { list ->
+                            list.map { if (it.port == port) it.copy(cloudUrl = url) else it }
+                        }
+                        appendTerminalLog(LogLevel.INFO, "[CLOUD TUNNEL] Port $port terbuka via $url")
+                    }
+                }
+
+                "DEV_TUNNEL_STOPPED" -> {
+                    val port = json.optInt("port", 0)
+                    if (port > 0) {
+                        _activeDevServers.update { list ->
+                            list.map { if (it.port == port) it.copy(cloudUrl = null) else it }
+                        }
+                        appendTerminalLog(LogLevel.INFO, "[CLOUD TUNNEL] Tunnel port $port ditutup.")
+                    }
+                }
+
+                // 5c. DAFTAR SCRIPTS PROYEK
+                "WORKSPACE_SCRIPTS" -> {
+                    val arr = json.optJSONArray("scripts")
+                    val sList = mutableListOf<WorkspaceScript>()
+                    if (arr != null) {
+                        for (i in 0 until arr.length()) {
+                            val item = arr.getJSONObject(i)
+                            sList.add(
+                                WorkspaceScript(
+                                    name = item.optString("name", ""),
+                                    command = item.optString("command", ""),
+                                    source = item.optString("source", "package.json")
+                                )
+                            )
+                        }
+                    }
+                    _workspaceScripts.value = sList
                 }
 
                 // 6. DAFTAR FILE PROJECT (BARU!)
@@ -532,6 +635,7 @@ class LanBridgeClient(
                     val data = json.optString("data", "")
                     if (data.isNotEmpty()) {
                         _liveTerminalOutput.update { (it + data).takeLast(100000) }
+                        extractNetworkUrlFromTerminal(data)
                     }
                 }
 
@@ -966,6 +1070,94 @@ class LanBridgeClient(
             webSocket?.send(payload.toString())
         }
         triggerSaveAll()
+    }
+
+    fun requestDevServers() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "GET_DEV_SERVERS")
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    fun requestWorkspaceScripts() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "GET_WORKSPACE_SCRIPTS")
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    fun killPort(port: Int) {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "KILL_PORT")
+                put("port", port)
+            }
+            webSocket?.send(payload.toString())
+            appendTerminalLog(LogLevel.COMMAND, "Meminta penghentian proses port $port...")
+        }
+    }
+
+    fun runWorkspaceScript(command: String) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return
+        appendTerminalLog(LogLevel.COMMAND, "$ $trimmed")
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "RUN_WORKSPACE_SCRIPT")
+                put("command", trimmed)
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    fun requestDevTunnel(port: Int) {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "START_DEV_TUNNEL")
+                put("port", port)
+            }
+            webSocket?.send(payload.toString())
+            appendTerminalLog(LogLevel.COMMAND, "Membuka Cloudflare Tunnel untuk port $port...")
+        }
+    }
+
+    fun stopDevTunnel(port: Int) {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "STOP_DEV_TUNNEL")
+                put("port", port)
+            }
+            webSocket?.send(payload.toString())
+            appendTerminalLog(LogLevel.COMMAND, "Menutup Cloudflare Tunnel untuk port $port...")
+        }
+    }
+
+    private fun extractNetworkUrlFromTerminal(data: String) {
+        val networkRegex = Regex("""(?:-\s+)?Network:\s*(https?://[a-zA-Z0-9.\-]+(?::\d+)?(?:/[^\s]*)?)""", RegexOption.IGNORE_CASE)
+        val match = networkRegex.find(data) ?: return
+        val rawUrl = match.groupValues[1].trim().removeSuffix("/")
+        try {
+            val uri = android.net.Uri.parse(rawUrl)
+            val port = if (uri.port != -1) uri.port else if (rawUrl.startsWith("https")) 443 else 80
+            _activeDevServers.update { current ->
+                val existing = current.find { it.port == port }
+                if (existing != null) {
+                    current.map { if (it.port == port) it.copy(lanUrl = rawUrl) else it }
+                } else {
+                    current + ActiveDevServer(
+                        port = port,
+                        processName = "Dev ($port)",
+                        localUrl = "http://localhost:$port",
+                        lanUrl = rawUrl,
+                        isCommonDevPort = true
+                    )
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     /**
