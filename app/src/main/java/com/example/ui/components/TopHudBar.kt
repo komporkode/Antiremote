@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ fun TopHudBar(
     workspaceInfo: WorkspaceInfo,
     isKeepScreenOn: Boolean = false,
     onToggleKeepScreenOn: () -> Unit = {},
+    onOpenSettingsClick: () -> Unit = {},
     onOpenConnectionDialog: () -> Unit,
     onScanQrClick: () -> Unit,
     onSaveAllClick: () -> Unit,
@@ -131,6 +133,21 @@ fun TopHudBar(
                     Icon(
                         imageVector = Icons.Outlined.Save,
                         contentDescription = "Simpan Semua",
+                        tint = ContentSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Settings Button
+                IconButton(
+                    onClick = onOpenSettingsClick,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .testTag("btn_open_settings")
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Pengaturan",
                         tint = ContentSecondary,
                         modifier = Modifier.size(16.dp)
                     )

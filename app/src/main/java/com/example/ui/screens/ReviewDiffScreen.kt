@@ -296,6 +296,8 @@ fun UnifiedDiffDetailViewer(
     onRequestRevision: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isWordWrap by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -315,6 +317,7 @@ fun UnifiedDiffDetailViewer(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -331,11 +334,27 @@ fun UnifiedDiffDetailViewer(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace
-                        )
+                        ),
+                        maxLines = 1
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconButton(
+                        onClick = { isWordWrap = !isWordWrap },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isWordWrap) Icons.Filled.WrapText else Icons.Outlined.WrapText,
+                            contentDescription = if (isWordWrap) "Nonaktifkan Lipat Baris" else "Aktifkan Lipat Baris (Wrap)",
+                            tint = if (isWordWrap) AccentPrimary else ContentSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
                     Text(
                         text = "+${diff.additions}",
                         color = DiffAddedText,
@@ -359,7 +378,7 @@ fun UnifiedDiffDetailViewer(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .then(if (!isWordWrap) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
                 .padding(vertical = 4.dp)
         ) {
             if (diff.hunks.isEmpty()) {
@@ -411,6 +430,7 @@ fun UnifiedDiffDetailViewer(
                         ) {
                             Text(
                                 text = prefix + line.content,
+                                softWrap = isWordWrap,
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = textColor,
                                     fontSize = 11.sp,

@@ -138,7 +138,7 @@ class LanBridgeClient(
     }
 
     private fun scheduleAutoReconnect() {
-        if (isExplicitDisconnect || lastTarget == null) return
+        if (isExplicitDisconnect || lastTarget == null || connectionPreferences?.isAutoReconnectEnabled() == false) return
         autoReconnectJob?.cancel()
         autoReconnectJob = scope.launch {
             reconnectAttempts++

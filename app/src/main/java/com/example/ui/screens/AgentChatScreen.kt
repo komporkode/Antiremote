@@ -119,48 +119,6 @@ fun AgentChatScreen(
             .background(AppBg)
             .testTag("agent_chat_screen")
     ) {
-        // Chat Sync Status Sub-bar
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = CardSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(AccentSuccess)
-                    )
-                    Text(
-                        text = "Sinkronisasi Antigravity IDE",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = ContentSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                }
-                Text(
-                    text = "${messages.size} pesan",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = ContentTertiary,
-                        fontSize = 11.sp
-                    )
-                )
-            }
-        }
-
         // Chat Messages List (LazyColumn)
         LazyColumn(
             state = listState,
@@ -490,29 +448,49 @@ fun AgentChatScreen(
                     )
                 }
 
-                FilledIconButton(
-                    onClick = {
-                        if (inputPrompt.isNotBlank()) {
-                            onSendPrompt(inputPrompt)
-                        }
-                    },
-                    enabled = inputPrompt.isNotBlank(),
-                    modifier = Modifier
-                        .size(42.dp)
-                        .testTag("btn_send_agent_prompt"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = AccentPrimary,
-                        contentColor = Color.White,
-                        disabledContainerColor = CardSurfaceVariant,
-                        disabledContentColor = ContentTertiary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Kirim Prompt",
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (isStreaming) {
+                    FilledIconButton(
+                        onClick = onCancelAgent,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .testTag("btn_cancel_agent"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = AccentDanger,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Hentikan Agent",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else {
+                    FilledIconButton(
+                        onClick = {
+                            if (inputPrompt.isNotBlank()) {
+                                onSendPrompt(inputPrompt)
+                            }
+                        },
+                        enabled = inputPrompt.isNotBlank(),
+                        modifier = Modifier
+                            .size(42.dp)
+                            .testTag("btn_send_agent_prompt"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = AccentPrimary,
+                            contentColor = Color.White,
+                            disabledContainerColor = CardSurfaceVariant,
+                            disabledContentColor = ContentTertiary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Kirim Prompt",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

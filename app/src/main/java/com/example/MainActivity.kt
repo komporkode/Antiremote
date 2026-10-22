@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -25,9 +26,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.model.ConnectionStatus
+import com.example.data.storage.ConnectionPreferences
 import com.example.service.BridgeNotificationService
 import com.example.ui.components.ConnectionDialog
 import com.example.ui.components.QrScannerDialog
+import com.example.ui.components.SettingsDialog
 import com.example.ui.components.TopHudBar
 import com.example.ui.components.VsCodeGuideDialog
 import com.example.ui.screens.*
@@ -47,7 +50,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun triggerHapticFeedback(context: android.content.Context, pattern: LongArray) {
+private fun triggerHapticFeedback(context: android.content.Context, preferences: ConnectionPreferences, pattern: LongArray) {
+    if (!preferences.isHapticEnabled()) return
     try {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
@@ -70,6 +74,8 @@ fun AntigravityApp(
     viewModel: AntigravityViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val connectionPreferences = remember { ConnectionPreferences(context) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val config by viewModel.connectionConfig.collectAsStateWithLifecycle()
     val agentTask by viewModel.agentTask.collectAsStateWithLifecycle()
@@ -104,7 +110,7 @@ fun AntigravityApp(
     var wasStreaming by remember { mutableStateOf(false) }
     LaunchedEffect(isAgentStreaming) {
         if (wasStreaming && !isAgentStreaming) {
-            triggerHapticFeedback(context, longArrayOf(0, 50))
+            triggerHapticFeedback(context, connectionPreferences, longArrayOf(0, 50))
         }
         wasStreaming = isAgentStreaming
     }
@@ -112,7 +118,7 @@ fun AntigravityApp(
     // Haptic Alert saat ada Approval Request yang pending (2x getar)
     LaunchedEffect(pendingApproval) {
         if (pendingApproval != null && pendingApproval?.status == com.example.data.model.ApprovalStatus.PENDING) {
-            triggerHapticFeedback(context, longArrayOf(0, 100, 100, 100))
+            triggerHapticFeedback(context, connectionPreferences, longArrayOf(0, 100, 100, 100))
         }
     }
 
@@ -167,6 +173,7 @@ fun AntigravityApp(
                 workspaceInfo = workspaceInfo,
                 isKeepScreenOn = isKeepScreenOn,
                 onToggleKeepScreenOn = { isKeepScreenOn = !isKeepScreenOn },
+                onOpenSettingsClick = { showSettingsDialog = true },
                 onOpenConnectionDialog = { viewModel.showConnectionDialog(true) },
                 onScanQrClick = { viewModel.showQrScanner(true) },
                 onSaveAllClick = {
@@ -198,10 +205,31 @@ fun AntigravityApp(
                         onClick = { viewModel.selectTab(tab) },
                         modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"),
                         icon = {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = label
-                            )
+                            if (tab == DashboardTab.REVIEW && workspaceDiffs.isNotEmpty()) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = AccentPrimary,
+                                            contentColor = Color.White
+                                        ) {
+                                            Text(
+                                                text = if (workspaceDiffs.size > 99) "99+" else workspaceDiffs.size.toString(),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label
+                                )
+                            }
                         },
                         label = {
                             Text(
@@ -358,6 +386,16 @@ fun AntigravityApp(
     if (uiState.showVsCodeGuideDialog) {
         VsCodeGuideDialog(
             onDismiss = { viewModel.showVsCodeGuide(false) }
+        )
+    }
+
+    // App Settings Dialog
+    if (showSettingsDialog) {
+        SettingsDialog(
+            preferences = connectionPreferences,
+            isKeepScreenOn = isKeepScreenOn,
+            onToggleKeepScreenOn = { isKeepScreenOn = !isKeepScreenOn },
+            onDismiss = { showSettingsDialog = false }
         )
     }
 }

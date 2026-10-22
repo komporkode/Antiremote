@@ -33,4 +33,16 @@ class ConnectionPreferences(context: Context) {
     fun clearConnection() {
         prefs.edit().clear().apply()
     }
+
+    fun isHapticEnabled(): Boolean = prefs.getBoolean("setting_haptic_enabled", true)
+
+    fun setHapticEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("setting_haptic_enabled", enabled).apply()
+    }
+
+    fun isAutoReconnectEnabled(): Boolean = prefs.getBoolean("setting_auto_reconnect", true)
+
+    fun setAutoReconnectEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("setting_auto_reconnect", enabled).apply()
+    }
 }

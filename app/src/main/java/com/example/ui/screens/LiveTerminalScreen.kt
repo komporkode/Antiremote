@@ -39,6 +39,10 @@ fun LiveTerminalScreen(
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
+    var fontSizeIndex by remember { mutableStateOf(1) } // 0: 10sp, 1: 12sp, 2: 14sp
+    val fontSizes = remember { listOf(10f, 12f, 14f) }
+    val currentFontSize = fontSizes[fontSizeIndex]
+
     val verticalScrollState = rememberScrollState()
     val horizontalScrollState = rememberScrollState()
 
@@ -158,6 +162,29 @@ fun LiveTerminalScreen(
                     )
                 }
 
+                // Font Size Toggle [A 12sp]
+                OutlinedButton(
+                    onClick = { fontSizeIndex = (fontSizeIndex + 1) % fontSizes.size },
+                    modifier = Modifier
+                        .height(30.dp)
+                        .testTag("btn_terminal_font_size"),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = ContentSecondary
+                    )
+                ) {
+                    Text(
+                        text = "A ${currentFontSize.toInt()}sp",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                }
+
                 // Clear Button
                 IconButton(
                     onClick = onClear,
@@ -215,8 +242,8 @@ fun LiveTerminalScreen(
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = FontFamily.Monospace,
                         color = Color(0xFFD4D4D4),
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.sp
+                        fontSize = currentFontSize.sp,
+                        lineHeight = (currentFontSize * 1.4f).sp
                     )
                 )
             }
