@@ -33,6 +33,7 @@ class AntigravityRepository(
     // Active Dev Servers & Workspace Scripts
     val activeDevServers: StateFlow<List<ActiveDevServer>> = client.activeDevServers
     val workspaceScripts: StateFlow<List<WorkspaceScript>> = client.workspaceScripts
+    val isChatFocusMode: StateFlow<Boolean> = client.isChatFocusMode
 
     fun connect(ip: String, port: Int = 9876, pin: String? = null) = client.connect(ip, port, pin)
     fun initStorage(context: android.content.Context) = client.initPreferences(context)
@@ -73,6 +74,6 @@ class AntigravityRepository(
     fun requestWorkspaceScripts() = client.requestWorkspaceScripts()
     fun killPort(port: Int) = client.killPort(port)
     fun runWorkspaceScript(command: String) = client.runWorkspaceScript(command)
-    fun requestDevTunnel(port: Int) = client.requestDevTunnel(port)
-    fun stopDevTunnel(port: Int) = client.stopDevTunnel(port)
+    fun toggleChatFocusMode() = client.toggleChatFocusMode()
+    fun requestLayoutState() = client.requestLayoutState()
 }

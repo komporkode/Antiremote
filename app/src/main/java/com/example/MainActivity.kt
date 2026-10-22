@@ -94,6 +94,7 @@ fun AntigravityApp(
     // Dev Servers (Live Preview) & Workspace Scripts
     val activeDevServers by viewModel.activeDevServers.collectAsStateWithLifecycle()
     val workspaceScripts by viewModel.workspaceScripts.collectAsStateWithLifecycle()
+    val isChatFocusMode by viewModel.isChatFocusMode.collectAsStateWithLifecycle()
 
     var isKeepScreenOn by remember { mutableStateOf(false) }
 
@@ -297,7 +298,12 @@ fun AntigravityApp(
                         onApprovalResponse = { id, approved, choice ->
                             viewModel.sendApprovalResponse(id, approved, choice)
                         },
-                        onSlashCommandClick = { viewModel.insertSlashCommand(it) }
+                        onSlashCommandClick = { viewModel.insertSlashCommand(it) },
+                        isChatFocusMode = isChatFocusMode,
+                        onToggleChatFocusMode = {
+                            viewModel.toggleChatFocusMode()
+                            Toast.makeText(context, if (!isChatFocusMode) "Mengaktifkan Mode Fokus Chat di PC..." else "Mengembalikan layout PC ke normal...", Toast.LENGTH_SHORT).show()
+                        }
                     )
                 }
 
@@ -355,6 +361,23 @@ fun AntigravityApp(
                         onRunScript = { cmd ->
                             viewModel.runWorkspaceScript(cmd)
                             Toast.makeText(context, "Menjalankan '$cmd' di Workstation", Toast.LENGTH_SHORT).show()
+                        },
+                        isChatFocusMode = isChatFocusMode,
+                        onToggleChatFocusMode = {
+                            viewModel.toggleChatFocusMode()
+                            Toast.makeText(context, if (!isChatFocusMode) "Mengaktifkan Mode Fokus Chat di PC..." else "Mengembalikan layout PC ke normal...", Toast.LENGTH_SHORT).show()
+                        },
+                        activeServers = activeDevServers,
+                        onTriggerHotReload = {
+                            viewModel.triggerHotReload()
+                            Toast.makeText(context, "Hot reload ('r') dikirim ke dev server", Toast.LENGTH_SHORT).show()
+                        },
+                        onKillPort = { port ->
+                            viewModel.killPort(port)
+                            Toast.makeText(context, "Mematikan server di port $port...", Toast.LENGTH_SHORT).show()
+                        },
+                        onOpenPreview = {
+                            viewModel.selectTab(DashboardTab.PREVIEW)
                         }
                     )
                 }
@@ -393,18 +416,6 @@ fun AntigravityApp(
                         onKillPort = { port ->
                             viewModel.killPort(port)
                             Toast.makeText(context, "Mematikan server di port $port...", Toast.LENGTH_SHORT).show()
-                        },
-                        onRequestDevTunnel = { port ->
-                            viewModel.requestDevTunnel(port)
-                            Toast.makeText(context, "Membuka Cloudflare Tunnel untuk port $port...", Toast.LENGTH_SHORT).show()
-                        },
-                        onStopDevTunnel = { port ->
-                            viewModel.stopDevTunnel(port)
-                            Toast.makeText(context, "Menutup Cloudflare Tunnel untuk port $port...", Toast.LENGTH_SHORT).show()
-                        },
-                        onRequestAiFix = { prompt ->
-                            viewModel.updateChatInput(prompt)
-                            viewModel.selectTab(DashboardTab.CHAT)
                         },
                         workspaceScripts = workspaceScripts,
                         onRunScript = { cmd ->

@@ -35,6 +35,7 @@ class AntigravityViewModel(
     // Active Dev Servers (In-App Preview) & Workspace Quick Scripts
     val activeDevServers: StateFlow<List<ActiveDevServer>> = repository.activeDevServers
     val workspaceScripts: StateFlow<List<WorkspaceScript>> = repository.workspaceScripts
+    val isChatFocusMode: StateFlow<Boolean> = repository.isChatFocusMode
 
     fun selectTab(tab: DashboardTab) {
         _uiState.update { it.copy(selectedTab = tab) }
@@ -308,6 +309,5 @@ class AntigravityViewModel(
         repository.sendLiveTerminalInput("r")
     }
 
-    fun requestDevTunnel(port: Int) = repository.requestDevTunnel(port)
-    fun stopDevTunnel(port: Int) = repository.stopDevTunnel(port)
+    fun toggleChatFocusMode() = repository.toggleChatFocusMode()
 }

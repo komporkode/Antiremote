@@ -124,7 +124,7 @@ fun AppPreviewScreen(
             .fillMaxSize()
             .background(AppBg)
     ) {
-        // Top Control Header
+        // Single Slim Top Control Header (~48dp)
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = CardSurface,
@@ -134,210 +134,312 @@ fun AppPreviewScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .height(48.dp)
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Navigation controls (Back, Forward, Reload)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    // Navigation controls (Back)
+                    IconButton(
+                        onClick = { if (webViewRef?.canGoBack() == true) webViewRef?.goBack() },
+                        enabled = canGoBack,
+                        modifier = Modifier.size(28.dp)
                     ) {
-                        IconButton(
-                            onClick = { if (webViewRef?.canGoBack() == true) webViewRef?.goBack() },
-                            enabled = canGoBack,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Kembali",
-                                tint = if (canGoBack) ContentPrimary else ContentTertiary,
-                                modifier = Modifier.size(18.dp)
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Kembali",
+                            tint = if (canGoBack) ContentPrimary else ContentTertiary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Active Dev Server Selector Pill / Dropdown
+                    var showServerDropdown by remember { mutableStateOf(false) }
+                    Box {
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    if (activeServers.size > 1) {
+                                        showServerDropdown = true
+                                    } else if (activeServers.isEmpty()) {
+                                        onRefreshServers()
+                                    }
+                                },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (activeServer != null) AccentSuccessSoft else CardSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (activeServer != null) AccentSuccess else CardBorder
                             )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(if (activeServer != null) AccentSuccess else ContentTertiary)
+                                )
+                                Text(
+                                    text = if (activeServer != null) "${activeServer.port}" else "Offline",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (activeServer != null) AccentSuccess else ContentTertiary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                                if (activeServers.size > 1) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = AccentSuccess,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
                         }
 
-                        IconButton(
-                            onClick = { if (webViewRef?.canGoForward() == true) webViewRef?.goForward() },
-                            enabled = canGoForward,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowForward,
-                                contentDescription = "Maju",
-                                tint = if (canGoForward) ContentPrimary else ContentTertiary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { webViewRef?.reload() },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Muat Ulang Halaman",
-                                tint = ContentPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        if (activeServers.size > 1) {
+                            DropdownMenu(
+                                expanded = showServerDropdown,
+                                onDismissRequest = { showServerDropdown = false },
+                                modifier = Modifier.background(CardSurface)
+                            ) {
+                                activeServers.forEach { s ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (s.port == activeServer?.port) AccentPrimary else AccentSuccess)
+                                                )
+                                                Text(
+                                                    text = "${s.name} (Port ${s.port})",
+                                                    color = if (s.port == activeServer?.port) AccentPrimary else ContentPrimary,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (s.port == activeServer?.port) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            showServerDropdown = false
+                                            val target = s.getBestUrl(isCloudConnection, bridgeHost)
+                                            onSelectUrl(target)
+                                            webViewRef?.loadUrl(target)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    // Center: URL Pill / Title
+                    // Center: Slim URL Pill
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 6.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable { isEditingUrl = !isEditingUrl },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = CardSurfaceVariant,
                         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = if (effectiveUrl.startsWith("https")) Icons.Default.Lock else Icons.Outlined.Language,
                                 contentDescription = null,
                                 tint = if (effectiveUrl.isNotBlank()) AccentSuccess else ContentTertiary,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = if (effectiveUrl.isBlank()) "Belum ada URL dev server" else effectiveUrl,
+                                text = if (effectiveUrl.isBlank()) "Belum ada server" else effectiveUrl.removePrefix("http://").removePrefix("https://"),
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = if (effectiveUrl.isNotBlank()) ContentPrimary else ContentTertiary,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp
+                                    fontSize = 10.sp
                                 ),
                                 maxLines = 1,
                                 modifier = Modifier.weight(1f)
                             )
-                            if (isCloudConnection) {
+                        }
+                    }
+
+                    // Viewport Cycle Button (Pill: Penuh -> 390 -> 375 -> Desktop)
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable {
+                                selectedViewport = when (selectedViewport) {
+                                    ViewportMode.FULL -> ViewportMode.IPHONE_STD
+                                    ViewportMode.IPHONE_STD -> ViewportMode.IPHONE_SE
+                                    ViewportMode.IPHONE_SE -> ViewportMode.DESKTOP
+                                    ViewportMode.DESKTOP -> ViewportMode.FULL
+                                }
+                            },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (selectedViewport != ViewportMode.FULL) AccentPrimarySoft else CardSurfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (selectedViewport != ViewportMode.FULL) AccentPrimary else CardBorder
+                        )
+                    ) {
+                        Text(
+                            text = when (selectedViewport) {
+                                ViewportMode.FULL -> "📱 Penuh"
+                                ViewportMode.IPHONE_STD -> "📱 390"
+                                ViewportMode.IPHONE_SE -> "📱 375"
+                                ViewportMode.DESKTOP -> "💻 PC"
+                            },
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (selectedViewport != ViewportMode.FULL) AccentPrimary else ContentSecondary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            )
+                        )
+                    }
+
+                    // Hot Reload Button ('r')
+                    IconButton(
+                        onClick = {
+                            onTriggerHotReload()
+                            webViewRef?.reload()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = "Hot Reload",
+                            tint = AccentPrimary,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    // Dev Console Drawer Button
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { isConsoleDrawerOpen = !isConsoleDrawerOpen },
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (errorCount > 0) AccentDangerSoft else if (isConsoleDrawerOpen) CardSurfaceVariant else AppBg,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (errorCount > 0) AccentDanger else CardBorder
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "Dev Console",
+                                tint = if (errorCount > 0) AccentDanger else ContentSecondary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            if (errorCount > 0) {
                                 Text(
-                                    text = "CLOUD",
+                                    text = "$errorCount",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = AccentPrimary,
+                                        color = AccentDanger,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 8.sp
+                                        fontSize = 9.sp
                                     )
                                 )
                             }
                         }
                     }
 
-                    // Right Actions: Hot Reload & Dev Tools
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // Hot Reload Button ('r')
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable {
-                                    onTriggerHotReload()
-                                    webViewRef?.reload()
-                                },
-                            shape = RoundedCornerShape(6.dp),
-                            color = AccentPrimarySoft,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = "Hot Reload",
-                                    tint = AccentPrimary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Text(
-                                    text = "Reload",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = AccentPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp
-                                    )
-                                )
-                            }
-                        }
-
-                        // Dev Console Drawer Button (Shows red badge if errors exist)
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { isConsoleDrawerOpen = !isConsoleDrawerOpen },
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (errorCount > 0) AccentDangerSoft else if (isConsoleDrawerOpen) CardSurfaceVariant else AppBg,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (errorCount > 0) AccentDanger else CardBorder
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Code,
-                                    contentDescription = "Dev Console",
-                                    tint = if (errorCount > 0) AccentDanger else ContentSecondary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                if (errorCount > 0) {
-                                    Text(
-                                        text = "$errorCount",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = AccentDanger,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        // External Browser Launcher
+                    // More Menu (Refresh, External Browser, Kill Server, Scan)
+                    var showMoreMenu by remember { mutableStateOf(false) }
+                    Box {
                         IconButton(
-                            onClick = {
-                                if (effectiveUrl.isNotBlank()) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(effectiveUrl))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {}
-                                }
-                            },
-                            enabled = effectiveUrl.isNotBlank(),
-                            modifier = Modifier.size(30.dp)
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.OpenInBrowser,
-                                contentDescription = "Buka di Browser Luar",
-                                tint = if (effectiveUrl.isNotBlank()) ContentSecondary else ContentTertiary,
-                                modifier = Modifier.size(17.dp)
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Menu Tambahan",
+                                tint = ContentSecondary,
+                                modifier = Modifier.size(16.dp)
                             )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false },
+                            modifier = Modifier.background(CardSurface)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Muat Ulang Halaman", fontSize = 12.sp, color = ContentPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, tint = ContentSecondary, modifier = Modifier.size(16.dp)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    webViewRef?.reload()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Pindai Ulang Port Dev", fontSize = 12.sp, color = ContentPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Sync, contentDescription = null, tint = ContentSecondary, modifier = Modifier.size(16.dp)) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onRefreshServers()
+                                }
+                            )
+                            if (effectiveUrl.isNotBlank()) {
+                                DropdownMenuItem(
+                                    text = { Text("Buka di Browser Luar", fontSize = 12.sp, color = ContentPrimary) },
+                                    leadingIcon = { Icon(Icons.Outlined.OpenInBrowser, contentDescription = null, tint = ContentSecondary, modifier = Modifier.size(16.dp)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(effectiveUrl))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
+                                )
+                            }
+                            if (activeServer != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Matikan Port ${activeServer.port}", fontSize = 12.sp, color = AccentDanger) },
+                                    leadingIcon = { Icon(Icons.Default.PowerSettingsNew, contentDescription = null, tint = AccentDanger, modifier = Modifier.size(16.dp)) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        portToKill = activeServer
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
-                // Expandable Custom URL Input (dengan auto-replace localhost -> bridgeHost)
+                // Expandable Custom URL Input
                 if (isEditingUrl) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         OutlinedTextField(
                             value = urlInput,
                             onValueChange = { urlInput = it },
-                            placeholder = { Text("Ketik port atau URL (otomatis ganti localhost ke LAN)", fontSize = 11.sp, color = ContentTertiary) },
+                            placeholder = { Text("Ketik port (e.g. 3000) atau URL", fontSize = 11.sp, color = ContentTertiary) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -359,7 +461,7 @@ fun AppPreviewScreen(
                                     webViewRef?.loadUrl(resolvedUrl)
                                 }
                             }),
-                            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = ContentPrimary),
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = ContentPrimary),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = AccentPrimary,
                                 unfocusedBorderColor = CardBorder,
@@ -388,221 +490,10 @@ fun AppPreviewScreen(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text("Buka", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                // Baris Viewport & Mode Desktop Switcher
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Viewport Presets
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Layar:",
-                            style = MaterialTheme.typography.labelSmall.copy(color = ContentTertiary, fontSize = 10.sp)
-                        )
-                        ViewportMode.values().forEach { mode ->
-                            val isSelected = selectedViewport == mode
-                            Surface(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable { selectedViewport = mode },
-                                shape = RoundedCornerShape(4.dp),
-                                color = if (isSelected) AccentPrimarySoft else CardSurfaceVariant,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (isSelected) AccentPrimary else CardBorder
-                                )
-                            ) {
-                                Text(
-                                    text = mode.label,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (isSelected) AccentPrimary else ContentSecondary,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 9.sp
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    // Scan port action
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { onRefreshServers() },
-                            shape = RoundedCornerShape(4.dp),
-                            color = CardSurfaceVariant,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Sync, contentDescription = "Pindai", tint = ContentSecondary, modifier = Modifier.size(11.dp))
-                                Text("Pindai Port", fontSize = 9.sp, color = ContentSecondary)
-                            }
-                        }
-                    }
-                }
-
-                // Cloud Tunnel Banner (Khusus Mode Cloud)
-                if (isCloudConnection && activeServer != null) {
-                    val hasTunnel = !activeServer.cloudUrl.isNullOrBlank()
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (hasTunnel) AccentSuccessSoft else AccentWarningSoft,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (hasTunnel) AccentSuccess else AccentWarning)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = if (hasTunnel) Icons.Default.Lock else Icons.Outlined.CloudQueue,
-                                    contentDescription = null,
-                                    tint = if (hasTunnel) AccentSuccess else AccentWarning,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = if (hasTunnel) {
-                                        "Tunnel Cloud Aktif: ${activeServer.cloudUrl}"
-                                    } else {
-                                        "Mode Cloud: Port ${activeServer.port} butuh tunnel publik"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = if (hasTunnel) AccentSuccess else ContentPrimary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    maxLines = 1
-                                )
-                            }
-
-                            if (hasTunnel) {
-                                TextButton(
-                                    onClick = { onStopDevTunnel(activeServer.port) },
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text("Matikan", color = AccentDanger, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                }
-                            } else {
-                                Button(
-                                    onClick = { onRequestDevTunnel(activeServer.port) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
-                                    shape = RoundedCornerShape(6.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text("Buka Tunnel", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Active Dev Servers Chip Carousel
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (activeServers.isEmpty()) {
-                        Text(
-                            text = "Tidak ada dev server terdeteksi",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = ContentTertiary)
-                        )
-                    } else {
-                        activeServers.forEach { server ->
-                            val targetUrl = server.getBestUrl(isCloudConnection, bridgeHost)
-                            val isCurrent = effectiveUrl == targetUrl || effectiveUrl == server.lanUrl || effectiveUrl == server.localUrl
-                            Surface(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        onSelectUrl(targetUrl)
-                                        webViewRef?.loadUrl(targetUrl)
-                                    },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isCurrent) AccentPrimarySoft else CardSurfaceVariant,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (isCurrent) AccentPrimary else CardBorder
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(if (isCurrent) AccentPrimary else AccentSuccess)
-                                    )
-
-                                    Text(
-                                        text = "${server.name} (${server.port})",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = if (isCurrent) AccentPrimary else ContentPrimary,
-                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-
-                                    if (!server.cloudUrl.isNullOrBlank()) {
-                                        Icon(
-                                            imageVector = Icons.Default.Cloud,
-                                            contentDescription = "Cloud",
-                                            tint = AccentPrimary,
-                                            modifier = Modifier.size(10.dp)
-                                        )
-                                    }
-
-                                    // Kill port action
-                                    IconButton(
-                                        onClick = { portToKill = server },
-                                        modifier = Modifier.size(18.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Hentikan Port",
-                                            tint = ContentTertiary,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                    }
-                                }
-                            }
                         }
                     }
                 }

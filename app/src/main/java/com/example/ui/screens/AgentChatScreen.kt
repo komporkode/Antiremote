@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.ui.components.RichMarkdownText
 import com.example.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,9 +62,12 @@ fun AgentChatScreen(
     onCancelAgent: () -> Unit,
     onApprovalResponse: (id: String, approved: Boolean, choice: String) -> Unit = { _, _, _ -> },
     onSlashCommandClick: (String) -> Unit,
+    isChatFocusMode: Boolean = false,
+    onToggleChatFocusMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
@@ -90,10 +94,17 @@ fun AgentChatScreen(
         }
     }
 
+    // Filter out empty background tool calls from chat history
+    val displayMessages = remember(messages, isStreaming) {
+        messages.filter { msg ->
+            msg.text.isNotBlank() || msg.approvalRequest != null || (msg.isStreaming && isStreaming)
+        }
+    }
+
     // Auto-scroll to bottom saat potongan teks baru masuk (streaming chunk)
-    LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length, activeToolBadge) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    LaunchedEffect(displayMessages.size, displayMessages.lastOrNull()?.text?.length, activeToolBadge) {
+        if (displayMessages.isNotEmpty()) {
+            listState.animateScrollToItem(displayMessages.size - 1)
         }
     }
 
@@ -119,61 +130,180 @@ fun AgentChatScreen(
             .background(AppBg)
             .testTag("agent_chat_screen")
     ) {
-        // Chat Messages List (LazyColumn)
-        LazyColumn(
-            state = listState,
+        // Top Sub-Header: Focus Mode & Session Status
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = CardSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (isStreaming) AccentWarning else AccentSuccess)
+                    )
+                    Text(
+                        text = if (isStreaming) "Agent Merespons..." else "Agent Siap",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = ContentSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+
+                // Focus Chat Mode Toggle Chip for PC IDE
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onToggleChatFocusMode() },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isChatFocusMode) AccentPrimarySoft else CardSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isChatFocusMode) AccentPrimary else CardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isChatFocusMode) Icons.Default.CloseFullscreen else Icons.Outlined.CenterFocusStrong,
+                            contentDescription = null,
+                            tint = if (isChatFocusMode) AccentPrimary else ContentSecondary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = if (isChatFocusMode) "PC: Fokus Chat" else "Fokuskan Chat di PC",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isChatFocusMode) AccentPrimary else ContentSecondary,
+                                fontWeight = if (isChatFocusMode) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+
+        // Chat Messages List (LazyColumn inside Box for Floating Action Button)
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .testTag("agent_chat_messages_list"),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (messages.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .testTag("agent_chat_messages_list"),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (displayMessages.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Forum,
-                                contentDescription = null,
-                                tint = ContentTertiary,
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Text(
-                                text = "Belum ada pesan",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    color = ContentSecondary,
-                                    fontWeight = FontWeight.SemiBold
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Forum,
+                                    contentDescription = null,
+                                    tint = ContentTertiary,
+                                    modifier = Modifier.size(36.dp)
                                 )
-                            )
-                            Text(
-                                text = "Ketik instruksi di bawah untuk mulai berkolaborasi dengan AI Agent di Antigravity IDE.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = ContentTertiary,
-                                    fontSize = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                ),
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
+                                Text(
+                                    text = "Belum ada pesan",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        color = ContentSecondary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                                Text(
+                                    text = "Ketik instruksi di bawah untuk mulai berkolaborasi dengan AI Agent di Antigravity IDE.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentTertiary,
+                                        fontSize = 12.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                )
+                            }
                         }
                     }
+                } else {
+                    items(displayMessages, key = { it.id }) { msg ->
+                        StreamingChatBubble(
+                            message = msg,
+                            isCurrentlyStreaming = msg.isStreaming && isStreaming,
+                            currentToolBadge = if (msg.isStreaming) activeToolBadge else msg.toolBadge,
+                            onApprovalResponse = onApprovalResponse
+                        )
+                    }
                 }
-            } else {
-                items(messages, key = { it.id }) { msg ->
-                    StreamingChatBubble(
-                        message = msg,
-                        isCurrentlyStreaming = msg.isStreaming && isStreaming,
-                        currentToolBadge = if (msg.isStreaming) activeToolBadge else msg.toolBadge,
-                        onApprovalResponse = onApprovalResponse
-                    )
+            }
+
+            // Floating Down Arrow Button (Scroll to Bottom)
+            val showScrollToBottom by remember {
+                derivedStateOf {
+                    val total = displayMessages.size
+                    if (total <= 1) false
+                    else {
+                        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        lastVisible < total - 2
+                    }
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showScrollToBottom,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 12.dp, end = 16.dp)
+            ) {
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable {
+                            coroutineScope.launch {
+                                if (displayMessages.isNotEmpty()) {
+                                    listState.animateScrollToItem(displayMessages.size - 1)
+                                }
+                            }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Scroll ke Bawah",
+                            tint = AccentPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
@@ -511,6 +641,9 @@ fun StreamingChatBubble(
     val hasText = textContent.isNotBlank()
     val hasApproval = message.approvalRequest != null
     val shouldShowBubble = hasText || hasApproval || (isCurrentlyStreaming && !isUser)
+
+    // Jangan render apa pun jika tidak ada teks dan tidak sedang aktif streaming
+    if (!shouldShowBubble) return
 
     // Animasi blinking kursor saat streaming aktif
     val infiniteTransition = rememberInfiniteTransition(label = "CursorPulse")

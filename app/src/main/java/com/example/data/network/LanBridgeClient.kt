@@ -126,6 +126,10 @@ class LanBridgeClient(
     private val _workspaceScripts = MutableStateFlow<List<WorkspaceScript>>(emptyList())
     val workspaceScripts: StateFlow<List<WorkspaceScript>> = _workspaceScripts.asStateFlow()
 
+    // 6. IDE Layout Focus Mode State
+    private val _isChatFocusMode = MutableStateFlow(false)
+    val isChatFocusMode: StateFlow<Boolean> = _isChatFocusMode.asStateFlow()
+
 
     init {
         appendTerminalLog(LogLevel.INFO, "Antigravity Remote Client siap (Port Default: 9876). Scan QR atau hubungkan.")
@@ -251,6 +255,7 @@ class LanBridgeClient(
                 requestChatHistory()
                 requestWorkspaceScripts()
                 requestDevServers()
+                requestLayoutState()
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -412,10 +417,24 @@ class LanBridgeClient(
                     val arr = json.optJSONArray("servers")
                     val sList = mutableListOf<ActiveDevServer>()
                     val currentHost = _connectionConfig.value.ipAddress
+                    val commonDevPorts = setOf(3000, 3001, 3002, 3003, 4200, 5000, 5001, 5173, 5174, 5175, 8000, 8001, 8008, 8080, 8081, 8888, 9000)
+                    val devKeywords = listOf("node", "vite", "next", "python", "flask", "django", "uvicorn", "go", "cargo", "deno", "bun", "php", "java")
+                    val blacklist = setOf("esrv_svc", "esrv", "svchost", "system", "code", "msedge", "chrome", "brave", "antigravity", "searchhost")
+
                     if (arr != null) {
                         for (i in 0 until arr.length()) {
                             val item = arr.getJSONObject(i)
                             val port = item.optInt("port", 0)
+                            val proc = item.optString("processName", "").lowercase()
+
+                            // Filter ketat: Buang service background Windows / hardware
+                            if (blacklist.any { proc.contains(it) }) continue
+
+                            // Hanya masukkan port dev umum ATAU proses dev dengan port < 10000
+                            val isCommon = port in commonDevPorts
+                            val isDevProc = devKeywords.any { proc.contains(it) } && port < 10000
+                            if (!isCommon && !isDevProc) continue
+
                             val localUrl = item.optString("localUrl", "http://localhost:$port")
                             var lanUrl = item.optString("lanUrl", "")
                             val cloudUrl = item.optString("cloudUrl", "").takeIf { it.isNotBlank() }
@@ -434,7 +453,7 @@ class LanBridgeClient(
                                     processName = item.optString("processName", ""),
                                     localUrl = localUrl,
                                     lanUrl = lanUrl,
-                                    isCommonDevPort = item.optBoolean("isCommonDevPort", true),
+                                    isCommonDevPort = true,
                                     cloudUrl = cloudUrl
                                 )
                             )
@@ -483,6 +502,16 @@ class LanBridgeClient(
                     _workspaceScripts.value = sList
                 }
 
+                // 5d. STATUS TATA LETAK FOKUS CHAT
+                "CHAT_FOCUS_MODE_STATE" -> {
+                    val isFocus = json.optBoolean("isFocusMode", false)
+                    _isChatFocusMode.value = isFocus
+                    appendTerminalLog(
+                        LogLevel.INFO,
+                        if (isFocus) "[IDE LAYOUT] Mode Fokus Chat (Pusat) Aktif di PC" else "[IDE LAYOUT] Mode Koding Normal Aktif di PC"
+                    )
+                }
+
                 // 6. DAFTAR FILE PROJECT (BARU!)
                 "WORKSPACE_FILES" -> {
                     val filesArray = json.optJSONArray("files")
@@ -517,6 +546,12 @@ class LanBridgeClient(
                             }
                             val textContent = msgObj.optString("text", msgObj.optString("content", msgObj.optString("message", "")))
                             val badge = msgObj.optString("toolBadge", "").ifEmpty { null }
+
+                            // Jangan masukkan tool execution background kosong ke riwayat chat
+                            if (textContent.isBlank() && sender == ChatSender.AGENT && !msgObj.has("approvalRequest")) {
+                                continue
+                            }
+
                             historyList.add(
                                 AgentChatMessage(
                                     sender = sender,
@@ -759,14 +794,6 @@ class LanBridgeClient(
 
     fun showAgentToolBadge(badgeText: String) {
         _agentToolBadge.value = badgeText
-        _chatMessages.update { list ->
-            if (list.isNotEmpty() && list.last().sender == ChatSender.AGENT) {
-                val last = list.last()
-                list.dropLast(1) + last.copy(toolBadge = badgeText)
-            } else {
-                list
-            }
-        }
     }
 
     fun finishChatStream(conversationId: String?) {
@@ -1109,6 +1136,25 @@ class LanBridgeClient(
             val payload = JSONObject().apply {
                 put("type", "RUN_WORKSPACE_SCRIPT")
                 put("command", trimmed)
+            }
+            webSocket?.send(payload.toString())
+        }
+    }
+
+    fun toggleChatFocusMode() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "TOGGLE_CHAT_FOCUS_MODE")
+            }
+            webSocket?.send(payload.toString())
+            appendTerminalLog(LogLevel.COMMAND, "Mengubah layout IDE (Toggle Focus Chat)...")
+        }
+    }
+
+    fun requestLayoutState() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED) {
+            val payload = JSONObject().apply {
+                put("type", "GET_LAYOUT_STATE")
             }
             webSocket?.send(payload.toString())
         }

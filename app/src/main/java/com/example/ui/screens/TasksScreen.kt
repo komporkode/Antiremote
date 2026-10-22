@@ -38,6 +38,12 @@ fun TasksScreen(
     terminalLogs: List<TerminalLog>,
     workspaceScripts: List<WorkspaceScript> = emptyList(),
     onRunScript: (String) -> Unit = {},
+    isChatFocusMode: Boolean = false,
+    onToggleChatFocusMode: () -> Unit = {},
+    activeServers: List<ActiveDevServer> = emptyList(),
+    onTriggerHotReload: () -> Unit = {},
+    onKillPort: (Int) -> Unit = {},
+    onOpenPreview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showLogs by remember { mutableStateOf(false) }
@@ -50,17 +56,180 @@ fun TasksScreen(
             .testTag("tasks_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Section 1: Active Agent Task Tracker
+        // Section 1: Agent Task Tracker (Slim Banner when IDLE, Rich Card when Active)
+        item {
+            if (agentTask.state == AgentExecutionState.IDLE) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(AccentSuccess)
+                            )
+                            Column {
+                                Text(
+                                    text = "AI Agent Workstation Siap",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        color = ContentPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                )
+                                Text(
+                                    text = "Ketik instruksi di Chat untuk menjalankan tugas",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentTertiary,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = AccentSuccessSoft
+                        ) {
+                            Text(
+                                text = "SIAP",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = AccentSuccess,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircleOutline,
+                                    contentDescription = null,
+                                    tint = AccentPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Tugas AI Sedang Berjalan",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        color = ContentPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = when (agentTask.state) {
+                                    AgentExecutionState.COMPLETED -> AccentSuccessSoft
+                                    AgentExecutionState.ERROR -> AccentDangerSoft
+                                    AgentExecutionState.WAITING_APPROVAL -> AccentWarningSoft
+                                    else -> AccentPrimarySoft
+                                }
+                            ) {
+                                Text(
+                                    text = when (agentTask.state) {
+                                        AgentExecutionState.THINKING -> "Berpikir"
+                                        AgentExecutionState.WRITING_CODE -> "Menulis Kode"
+                                        AgentExecutionState.EXECUTING_COMMAND -> "Eksekusi Alat"
+                                        AgentExecutionState.WAITING_APPROVAL -> "Menunggu Izin"
+                                        AgentExecutionState.COMPLETED -> "Selesai"
+                                        AgentExecutionState.ERROR -> "Error"
+                                        else -> "Aktif"
+                                    },
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = when (agentTask.state) {
+                                            AgentExecutionState.COMPLETED -> AccentSuccess
+                                            AgentExecutionState.ERROR -> AccentDanger
+                                            AgentExecutionState.WAITING_APPROVAL -> AccentWarning
+                                            else -> AccentPrimary
+                                        },
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = agentTask.title.ifEmpty { "Pengembangan Fitur & Refactoring" },
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = ContentPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                        )
+
+                        Text(
+                            text = agentTask.currentStepDescription.ifEmpty { "Memproses instruksi..." },
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = ContentSecondary,
+                                fontSize = 12.sp
+                            )
+                        )
+
+                        // Linear Progress
+                        LinearProgressIndicator(
+                            progress = { agentTask.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = AccentPrimary,
+                            trackColor = CardSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Section 1b: Dev Server Status & Real Controls
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = CardSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -72,83 +241,177 @@ fun TasksScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.CheckCircleOutline,
+                                imageVector = Icons.Outlined.Dns,
                                 contentDescription = null,
-                                tint = AccentPrimary,
-                                modifier = Modifier.size(16.dp)
+                                tint = if (activeServers.isNotEmpty()) AccentSuccess else ContentTertiary,
+                                modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "Tugas AI Saat Ini",
+                                text = "Dev Server Workstation",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     color = ContentPrimary,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp
                                 )
                             )
                         }
 
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = when (agentTask.state) {
-                                AgentExecutionState.COMPLETED -> AccentSuccessSoft
-                                AgentExecutionState.ERROR -> AccentDangerSoft
-                                AgentExecutionState.WAITING_APPROVAL -> AccentWarningSoft
-                                else -> AccentPrimarySoft
-                            }
+                            color = if (activeServers.isNotEmpty()) AccentSuccessSoft else CardSurfaceVariant
                         ) {
                             Text(
-                                text = when (agentTask.state) {
-                                    AgentExecutionState.IDLE -> "Siap"
-                                    AgentExecutionState.THINKING -> "Berpikir"
-                                    AgentExecutionState.WRITING_CODE -> "Menulis Kode"
-                                    AgentExecutionState.EXECUTING_COMMAND -> "Eksekusi Alat"
-                                    AgentExecutionState.WAITING_APPROVAL -> "Menunggu Izin"
-                                    AgentExecutionState.COMPLETED -> "Selesai"
-                                    AgentExecutionState.ERROR -> "Error"
-                                    else -> "Aktif"
-                                },
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                text = if (activeServers.isNotEmpty()) "${activeServers.size} Aktif" else "Offline",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = when (agentTask.state) {
-                                        AgentExecutionState.COMPLETED -> AccentSuccess
-                                        AgentExecutionState.ERROR -> AccentDanger
-                                        AgentExecutionState.WAITING_APPROVAL -> AccentWarning
-                                        else -> AccentPrimary
-                                    },
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 10.sp
+                                    color = if (activeServers.isNotEmpty()) AccentSuccess else ContentTertiary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
                                 )
                             )
                         }
                     }
 
-                    Text(
-                        text = agentTask.title.ifEmpty { "Pengembangan Fitur & Refactoring" },
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = ContentPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
-                    )
+                    if (activeServers.isNotEmpty()) {
+                        activeServers.forEach { server ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(CardSurfaceVariant)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(AccentSuccess)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = "${server.name} (: ${server.port})",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = ContentPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                        Text(
+                                            text = server.lanUrl.ifEmpty { server.localUrl },
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = ContentTertiary,
+                                                fontSize = 9.sp
+                                            )
+                                        )
+                                    }
+                                }
 
-                    Text(
-                        text = agentTask.currentStepDescription.ifEmpty { "Menunggu instruksi tugas berikutnya..." },
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = ContentSecondary,
-                            fontSize = 12.sp
-                        )
-                    )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    // Hot Reload ('r')
+                                    Surface(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { onTriggerHotReload() },
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = AccentPrimarySoft
+                                    ) {
+                                        Text(
+                                            text = "⚡ Reload",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = AccentPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        )
+                                    }
 
-                    // Linear Progress
-                    LinearProgressIndicator(
-                        progress = { agentTask.progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = AccentPrimary,
-                        trackColor = CardSurfaceVariant
-                    )
+                                    // Buka Preview
+                                    Surface(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { onOpenPreview() },
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = AccentSuccessSoft
+                                    ) {
+                                        Text(
+                                            text = "🌐 Preview",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = AccentSuccess,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        )
+                                    }
+
+                                    // Kill Port
+                                    Surface(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { onKillPort(server.port) },
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = AccentDangerSoft
+                                    ) {
+                                        Text(
+                                            text = "✕",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = AccentDanger,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CardSurfaceVariant)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Tidak ada dev server berjalan",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = ContentTertiary,
+                                    fontSize = 11.sp
+                                )
+                            )
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { onRunDev() },
+                                shape = RoundedCornerShape(4.dp),
+                                color = AccentPrimarySoft
+                            ) {
+                                Text(
+                                    text = "▶ Run Dev",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = AccentPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -315,6 +578,12 @@ fun TasksScreen(
                     label = "Git Push",
                     icon = Icons.Outlined.CloudUpload,
                     onClick = onGitPush,
+                    modifier = Modifier.weight(1f)
+                )
+                QuickActionButton(
+                    label = if (isChatFocusMode) "Exit Focus" else "Focus Chat",
+                    icon = if (isChatFocusMode) Icons.Default.CloseFullscreen else Icons.Outlined.CenterFocusStrong,
+                    onClick = onToggleChatFocusMode,
                     modifier = Modifier.weight(1f)
                 )
             }
