@@ -7,7 +7,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -28,6 +30,8 @@ import com.example.ui.theme.*
 fun TopHudBar(
     config: ConnectionConfig,
     workspaceInfo: WorkspaceInfo,
+    isKeepScreenOn: Boolean = false,
+    onToggleKeepScreenOn: () -> Unit = {},
     onOpenConnectionDialog: () -> Unit,
     onScanQrClick: () -> Unit,
     onSaveAllClick: () -> Unit,
@@ -104,6 +108,21 @@ fun TopHudBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Mode Meja: Layar Selalu Aktif (Keep Screen On)
+                IconButton(
+                    onClick = onToggleKeepScreenOn,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .testTag("btn_keep_screen_on")
+                ) {
+                    Icon(
+                        imageVector = if (isKeepScreenOn) Icons.Filled.Lightbulb else Icons.Outlined.Lightbulb,
+                        contentDescription = if (isKeepScreenOn) "Mode Meja Aktif (Layar Tidak Sleep)" else "Aktifkan Mode Meja",
+                        tint = if (isKeepScreenOn) AccentWarning else ContentSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
                 // Quick Save All Button
                 IconButton(
                     onClick = onSaveAllClick,

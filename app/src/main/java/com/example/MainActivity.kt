@@ -47,6 +47,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun triggerHapticFeedback(context: android.content.Context, pattern: LongArray) {
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, -1)
+        }
+    } catch (_: Exception) {}
+}
+
 @Composable
 fun AntigravityApp(
     viewModel: AntigravityViewModel = viewModel()
@@ -66,6 +84,37 @@ fun AntigravityApp(
     val workspaceDiffs by viewModel.workspaceDiffs.collectAsStateWithLifecycle()
     val conversationSessions by viewModel.conversationSessions.collectAsStateWithLifecycle()
     val liveTerminalOutput by viewModel.liveTerminalOutput.collectAsStateWithLifecycle()
+
+    var isKeepScreenOn by remember { mutableStateOf(false) }
+
+    // Mode Meja: Layar Selalu Aktif (Keep Screen On)
+    DisposableEffect(isKeepScreenOn) {
+        val window = (context as? android.app.Activity)?.window
+        if (isKeepScreenOn) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    // Haptic Alert saat Agent selesai streaming (1x getar halus)
+    var wasStreaming by remember { mutableStateOf(false) }
+    LaunchedEffect(isAgentStreaming) {
+        if (wasStreaming && !isAgentStreaming) {
+            triggerHapticFeedback(context, longArrayOf(0, 50))
+        }
+        wasStreaming = isAgentStreaming
+    }
+
+    // Haptic Alert saat ada Approval Request yang pending (2x getar)
+    LaunchedEffect(pendingApproval) {
+        if (pendingApproval != null && pendingApproval?.status == com.example.data.model.ApprovalStatus.PENDING) {
+            triggerHapticFeedback(context, longArrayOf(0, 100, 100, 100))
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -116,6 +165,8 @@ fun AntigravityApp(
             TopHudBar(
                 config = config,
                 workspaceInfo = workspaceInfo,
+                isKeepScreenOn = isKeepScreenOn,
+                onToggleKeepScreenOn = { isKeepScreenOn = !isKeepScreenOn },
                 onOpenConnectionDialog = { viewModel.showConnectionDialog(true) },
                 onScanQrClick = { viewModel.showQrScanner(true) },
                 onSaveAllClick = {
@@ -260,7 +311,11 @@ fun AntigravityApp(
                         output = liveTerminalOutput,
                         onSendInput = { viewModel.sendLiveTerminalInput(it) },
                         onInterrupt = { viewModel.sendTerminalInterrupt() },
-                        onClear = { viewModel.clearLiveTerminal() }
+                        onClear = { viewModel.clearLiveTerminal() },
+                        onRequestAiFix = { prompt ->
+                            viewModel.updateChatInput(prompt)
+                            viewModel.selectTab(DashboardTab.CHAT)
+                        }
                     )
                 }
             }

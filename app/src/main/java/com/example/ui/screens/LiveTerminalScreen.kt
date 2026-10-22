@@ -35,6 +35,7 @@ fun LiveTerminalScreen(
     onSendInput: (String) -> Unit,
     onInterrupt: () -> Unit,
     onClear: () -> Unit,
+    onRequestAiFix: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -100,6 +101,40 @@ fun LiveTerminalScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Tanya AI Button (Forward tail output ke Chat)
+                if (onRequestAiFix != null && output.isNotBlank()) {
+                    FilledTonalButton(
+                        onClick = {
+                            val tailLines = output.lines().takeLast(30).joinToString("\n").trim()
+                            val prompt = "Tolong periksa dan perbaiki error berikut dari terminal:\n```\n$tailLines\n```"
+                            onRequestAiFix(prompt)
+                        },
+                        modifier = Modifier
+                            .height(30.dp)
+                            .testTag("btn_terminal_ai_fix"),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentPrimarySoft,
+                            contentColor = AccentPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Tanya AI",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+
                 // Ctrl+C Interrupt Button
                 OutlinedButton(
                     onClick = onInterrupt,

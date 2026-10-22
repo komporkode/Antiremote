@@ -10,8 +10,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,6 +48,7 @@ import com.example.data.model.*
 import com.example.ui.components.RichMarkdownText
 import com.example.ui.theme.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AgentChatScreen(
     messages: List<AgentChatMessage>,
@@ -93,6 +96,13 @@ fun AgentChatScreen(
             listState.animateScrollToItem(messages.size - 1)
         }
     }
+
+    val quickActionMacros = listOf(
+        "🧪 Test & Fix" to "Jalankan unit test dan perbaiki jika ada error",
+        "📝 Git Diff" to "Cek git status dan jelaskan ringkasan perubahan file",
+        "🚀 Commit & Push" to "Buat git commit dengan pesan yang deskriptif dan push",
+        "🧹 Lint & Clean" to "Jalankan lint/format code dan rapikan kode yang tidak terpakai"
+    )
 
     val slashCommands = listOf(
         "🎯 /goal" to "/goal ",
@@ -344,15 +354,45 @@ fun AgentChatScreen(
             }
         }
 
-        // Slash Command Chips Bar
+        // Action & Slash Command Chips Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 14.dp, vertical = 6.dp)
-                .testTag("slash_command_chips_bar"),
+                .testTag("action_chips_bar"),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Quick Action Macros (1-Tap Send, Long-Press Edit)
+            quickActionMacros.forEach { (label, prompt) ->
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .combinedClickable(
+                            onClick = { onSendPrompt(prompt) },
+                            onLongClick = {
+                                onInputChange(prompt)
+                                Toast.makeText(context, "Prompt disalin ke input untuk diedit", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        .testTag("macro_${label.filter { it.isLetter() }}"),
+                    shape = RoundedCornerShape(20.dp),
+                    color = AccentPrimarySoft,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = AccentPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+            }
+
+            // Slash Commands
             slashCommands.forEach { (label, command) ->
                 Surface(
                     modifier = Modifier
