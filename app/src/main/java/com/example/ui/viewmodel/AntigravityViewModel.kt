@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.example.data.model.*
+import com.example.data.storage.SavedConnection
 import com.example.data.repository.AntigravityRepository
 import kotlinx.coroutines.flow.*
 
@@ -53,6 +54,35 @@ class AntigravityViewModel(
 
     fun updateTargetPortInput(port: String) {
         _uiState.update { it.copy(targetPortInput = port) }
+    }
+
+    fun initStorage(context: android.content.Context) {
+        repository.initStorage(context)
+        val last = repository.getLastSavedConnection()
+        if (last != null && _uiState.value.targetIpInput.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    targetIpInput = last.host,
+                    targetPortInput = last.port.toString()
+                )
+            }
+        }
+    }
+
+    fun getLastSavedConnection(): SavedConnection? = repository.getLastSavedConnection()
+
+    fun reconnectLastKnown() {
+        val last = repository.getLastSavedConnection()
+        if (last != null) {
+            _uiState.update {
+                it.copy(
+                    targetIpInput = last.host,
+                    targetPortInput = last.port.toString(),
+                    showConnectionDialog = false
+                )
+            }
+            repository.connect(last.host, last.port, last.pin)
+        }
     }
 
     fun connectToBridge(pin: String? = null) {

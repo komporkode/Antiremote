@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.ConnectionConfig
 import com.example.data.model.ConnectionStatus
+import com.example.data.storage.SavedConnection
 import com.example.ui.theme.*
 
 @Composable
@@ -31,6 +32,8 @@ fun ConnectionDialog(
     ipInput: String,
     portInput: String,
     history: List<String>,
+    lastSavedConnection: SavedConnection? = null,
+    onReconnectLast: () -> Unit = {},
     onIpChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onConnect: (String?) -> Unit,
@@ -89,6 +92,67 @@ fun ConnectionDialog(
                             contentDescription = "Close",
                             tint = ContentSecondary
                         )
+                    }
+                }
+
+                // 1-Tap Reconnect Card
+                if (lastSavedConnection != null) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                onReconnectLast()
+                                onDismiss()
+                            }
+                            .testTag("btn_reconnect_last"),
+                        shape = RoundedCornerShape(10.dp),
+                        color = AccentPrimarySoft,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = AccentPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Sambungkan Kembali (1-Tap)",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentPrimary,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                    Text(
+                                        text = "${lastSavedConnection.host}:${lastSavedConnection.port}",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = ContentSecondary,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 

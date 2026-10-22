@@ -36,6 +36,13 @@ class LanBridgeClient(
     private var simulationJob: Job? = null
     private var agentStreamJob: Job? = null
     private var lastPingSendTime: Long = 0L
+    private var autoReconnectJob: Job? = null
+    private var lastTarget: String? = null
+    private var lastPort: Int = 9876
+    private var lastPin: String? = null
+    private var isExplicitDisconnect: Boolean = false
+    private var reconnectAttempts: Int = 0
+    private var connectionPreferences: com.example.data.storage.ConnectionPreferences? = null
 
     private val _connectionConfig = MutableStateFlow(ConnectionConfig())
     val connectionConfig: StateFlow<ConnectionConfig> = _connectionConfig.asStateFlow()
@@ -120,9 +127,53 @@ class LanBridgeClient(
     /**
      * Connects to Workstation at ws://$ip:$port
      */
-        fun connect(target: String, port: Int = 9876, pin: String? = null) {
+    fun initPreferences(context: android.content.Context) {
+        if (connectionPreferences == null) {
+            connectionPreferences = com.example.data.storage.ConnectionPreferences(context.applicationContext)
+        }
+    }
+
+    fun getLastSavedConnection(): com.example.data.storage.SavedConnection? {
+        return connectionPreferences?.getLastConnection()
+    }
+
+    private fun scheduleAutoReconnect() {
+        if (isExplicitDisconnect || lastTarget == null) return
+        autoReconnectJob?.cancel()
+        autoReconnectJob = scope.launch {
+            reconnectAttempts++
+            val backoffMs = when (reconnectAttempts) {
+                1 -> 1500L
+                2 -> 3000L
+                else -> 5000L
+            }
+            _connectionConfig.update {
+                it.copy(
+                    status = ConnectionStatus.CONNECTING,
+                    errorMessage = "Koneksi terputus. Menghubungkan kembali (${reconnectAttempts})..."
+                )
+            }
+            appendTerminalLog(LogLevel.WARN, "Koneksi terputus. Mencoba reconnect otomatis dalam ${backoffMs / 1000} detik...")
+            delay(backoffMs)
+            val target = lastTarget ?: return@launch
+            connect(target, lastPort, lastPin, isAutoReconnect = true)
+        }
+    }
+
+    fun connect(target: String, port: Int = 9876, pin: String? = null, isAutoReconnect: Boolean = false) {
         simulationJob?.cancel()
-        disconnect()
+        if (!isAutoReconnect) {
+            isExplicitDisconnect = false
+            reconnectAttempts = 0
+            autoReconnectJob?.cancel()
+            lastTarget = target
+            lastPort = port
+            lastPin = pin
+            disconnectInternal()
+        } else {
+            webSocket?.close(1000, null)
+            webSocket = null
+        }
 
         val trimmed = target.trim()
         val isCloud = trimmed.startsWith("wss://") || 
@@ -160,6 +211,8 @@ class LanBridgeClient(
         lastPingSendTime = System.currentTimeMillis()
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
+                reconnectAttempts = 0
+                autoReconnectJob?.cancel()
                 val ping = (System.currentTimeMillis() - lastPingSendTime).coerceAtLeast(4L)
                 _connectionConfig.update {
                     it.copy(
@@ -170,6 +223,9 @@ class LanBridgeClient(
                     )
                 }
                 appendTerminalLog(LogLevel.SUCCESS, "Terhubung ke Antigravity Bridge [${ping}ms]")
+
+                // Simpan profil koneksi terakhir ke SharedPreferences
+                connectionPreferences?.saveConnection(target, port, pin)
 
                 // Jika menyertakan PIN keamanan, kirim pesan otentikasi seketika
                 if (!pin.isNullOrBlank()) {
@@ -196,12 +252,15 @@ class LanBridgeClient(
                 val errorMsg = t.localizedMessage ?: "Connection refused"
                 _connectionConfig.update {
                     it.copy(
-                        status = ConnectionStatus.ERROR,
+                        status = if (!isExplicitDisconnect && lastTarget != null) ConnectionStatus.CONNECTING else ConnectionStatus.ERROR,
                         isDemoMode = false,
                         errorMessage = "Gagal konek: $errorMsg"
                     )
                 }
                 appendTerminalLog(LogLevel.ERROR, "Gagal konek ke $displayHost: $errorMsg")
+                if (!isExplicitDisconnect && lastTarget != null) {
+                    scheduleAutoReconnect()
+                }
             }
 
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
@@ -216,11 +275,22 @@ class LanBridgeClient(
                 _connectionConfig.update {
                     it.copy(status = ConnectionStatus.DISCONNECTED)
                 }
+                if (!isExplicitDisconnect && lastTarget != null) {
+                    scheduleAutoReconnect()
+                }
             }
         })
     }
 
     fun disconnect() {
+        isExplicitDisconnect = true
+        autoReconnectJob?.cancel()
+        reconnectAttempts = 0
+        disconnectInternal()
+        appendTerminalLog(LogLevel.WARN, "Koneksi diputus oleh pengguna.")
+    }
+
+    private fun disconnectInternal() {
         webSocket?.close(1000, "User disconnect")
         webSocket = null
         simulationJob?.cancel()
@@ -230,8 +300,8 @@ class LanBridgeClient(
         _connectionConfig.update {
             it.copy(status = ConnectionStatus.DISCONNECTED, isDemoMode = false)
         }
-        appendTerminalLog(LogLevel.WARN, "Koneksi diputus oleh pengguna.")
     }
+
 
     /**
      * UPGRADED WebSocket Message Handler (onMessage)

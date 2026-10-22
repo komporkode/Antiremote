@@ -31,6 +31,8 @@ class AntigravityRepository(
     val liveTerminalOutput: StateFlow<String> = client.liveTerminalOutput
 
     fun connect(ip: String, port: Int = 9876, pin: String? = null) = client.connect(ip, port, pin)
+    fun initStorage(context: android.content.Context) = client.initPreferences(context)
+    fun getLastSavedConnection() = client.getLastSavedConnection()
     fun disconnect() = client.disconnect()
     fun startDemoSimulation() = client.startDemoSimulation()
     fun sendCommand(command: String) = client.sendTerminalCommand(command)

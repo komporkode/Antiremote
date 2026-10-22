@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.*
+import com.example.ui.components.RichMarkdownText
 import com.example.ui.theme.*
 
 @Composable
@@ -488,8 +489,12 @@ fun StreamingChatBubble(
 ) {
     val isUser = message.sender == ChatSender.USER
     val isSystem = message.sender == ChatSender.SYSTEM
+    val textContent = message.text
+    val hasText = textContent.isNotBlank()
+    val hasApproval = message.approvalRequest != null
+    val shouldShowBubble = hasText || hasApproval || (isCurrentlyStreaming && !isUser)
 
-    // Animasi blinking kursor
+    // Animasi blinking kursor saat streaming aktif
     val infiniteTransition = rememberInfiniteTransition(label = "CursorPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.2f,
@@ -539,23 +544,32 @@ fun StreamingChatBubble(
             if (!isUser && currentToolBadge != null) {
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = AccentPrimarySoft,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.3f))
+                    color = if (isCurrentlyStreaming) AccentPrimarySoft else CardSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isCurrentlyStreaming) AccentPrimary.copy(alpha = 0.3f) else CardBorder)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(8.dp),
-                            color = AccentPrimary,
-                            strokeWidth = 1.5.dp
-                        )
+                        if (isCurrentlyStreaming) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(8.dp),
+                                color = AccentPrimary,
+                                strokeWidth = 1.5.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selesai",
+                                tint = AccentSuccess,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
                         Text(
                             text = currentToolBadge,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = AccentPrimary,
+                                color = if (isCurrentlyStreaming) AccentPrimary else ContentSecondary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 fontFamily = FontFamily.Monospace
@@ -566,64 +580,80 @@ fun StreamingChatBubble(
             }
         }
 
-        // Bubble Surface
-        Surface(
-            modifier = Modifier
-                .widthIn(max = 340.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 14.dp,
-                        topEnd = 14.dp,
-                        bottomStart = if (isUser) 14.dp else 4.dp,
-                        bottomEnd = if (isUser) 4.dp else 14.dp
-                    )
-                ),
-            color = when {
-                isUser -> AccentPrimary
-                isSystem -> AccentDangerSoft
-                else -> CardSurface
-            },
-            border = if (isUser) null else androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                val textContent = message.text
-                if (!isUser && textContent.contains("```")) {
-                    MarkdownCodeSegments(
-                        content = textContent,
-                        isCurrentlyStreaming = isCurrentlyStreaming,
-                        pulseAlpha = pulseAlpha
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = textContent.ifEmpty { if (isCurrentlyStreaming) "..." else "" },
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = if (isUser) Color.White else ContentPrimary,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp
-                            )
+        // Bubble Surface (Hanya render jika ada teks, request approval, atau sedang streaming aktif)
+        if (shouldShowBubble) {
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = 340.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 14.dp,
+                            topEnd = 14.dp,
+                            bottomStart = if (isUser) 14.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 14.dp
                         )
-
-                        if (isCurrentlyStreaming) {
-                            Spacer(modifier = Modifier.width(3.dp))
+                    ),
+                color = when {
+                    isUser -> AccentPrimary
+                    isSystem -> AccentDangerSoft
+                    else -> CardSurface
+                },
+                border = if (isUser) null else androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    if (hasText) {
+                        if (isUser) {
+                            Text(
+                                text = textContent,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp
+                                )
+                            )
+                        } else {
+                            RichMarkdownText(
+                                content = textContent,
+                                textColor = ContentPrimary
+                            )
+                        }
+                    } else if (isCurrentlyStreaming) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Sedang bekerja...",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = ContentTertiary,
+                                    fontSize = 11.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
                             Box(
                                 modifier = Modifier
-                                    .size(width = 7.dp, height = 14.dp)
+                                    .size(width = 6.dp, height = 12.dp)
                                     .background(AccentPrimary.copy(alpha = pulseAlpha))
                             )
                         }
                     }
-                }
 
-                // Interactive Approval Card (Human-in-the-Loop)
-                if (message.approvalRequest != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    InteractiveApprovalCard(
-                        request = message.approvalRequest,
-                        onResponse = onApprovalResponse
-                    )
+                    if (isCurrentlyStreaming && hasText) {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(width = 7.dp, height = 14.dp)
+                                .background(AccentPrimary.copy(alpha = pulseAlpha))
+                        )
+                    }
+
+                    // Interactive Approval Card (Human-in-the-Loop)
+                    if (message.approvalRequest != null) {
+                        if (hasText) Spacer(modifier = Modifier.height(10.dp))
+                        InteractiveApprovalCard(
+                            request = message.approvalRequest,
+                            onResponse = onApprovalResponse
+                        )
+                    }
                 }
             }
         }
@@ -759,92 +789,5 @@ fun InteractiveApprovalCard(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun MarkdownCodeSegments(
-    content: String,
-    isCurrentlyStreaming: Boolean,
-    pulseAlpha: Float
-) {
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-    val parts = content.split("```")
-
-    parts.forEachIndexed { index, part ->
-        if (index % 2 == 1) {
-            val firstLine = part.substringBefore("\n").trim()
-            val codeBody = if (part.contains("\n")) part.substringAfter("\n") else part
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = CardSurfaceVariant,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = firstLine.ifEmpty { "code" },
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = AccentPrimary,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp
-                            )
-                        )
-                        IconButton(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(codeBody))
-                                Toast.makeText(context, "Kode disalin", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Salin Kode",
-                                tint = ContentSecondary,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = codeBody,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = ContentPrimary,
-                            lineHeight = 16.sp
-                        )
-                    )
-                }
-            }
-        } else {
-            if (part.isNotEmpty()) {
-                Text(
-                    text = part,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = ContentPrimary,
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp
-                    )
-                )
-            }
-        }
-    }
-
-    if (isCurrentlyStreaming) {
-        Spacer(modifier = Modifier.height(3.dp))
-        Box(
-            modifier = Modifier
-                .size(width = 7.dp, height = 14.dp)
-                .background(AccentPrimary.copy(alpha = pulseAlpha))
-        )
     }
 }

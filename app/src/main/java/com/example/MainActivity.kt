@@ -72,6 +72,7 @@ fun AntigravityApp(
     ) { _ -> }
 
     LaunchedEffect(Unit) {
+        viewModel.initStorage(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionLauncher.launch(
                 arrayOf(
@@ -273,6 +274,8 @@ fun AntigravityApp(
             ipInput = uiState.targetIpInput,
             portInput = uiState.targetPortInput,
             history = uiState.connectionHistory,
+            lastSavedConnection = viewModel.getLastSavedConnection(),
+            onReconnectLast = { viewModel.reconnectLastKnown() },
             onIpChange = { viewModel.updateTargetIpInput(it) },
             onPortChange = { viewModel.updateTargetPortInput(it) },
             onConnect = { pin -> viewModel.connectToBridge(pin) },
