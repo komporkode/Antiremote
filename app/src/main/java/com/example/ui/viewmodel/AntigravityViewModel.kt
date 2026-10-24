@@ -31,6 +31,7 @@ class AntigravityViewModel(
     val pendingApproval: StateFlow<AgentApprovalRequest?> = repository.pendingApproval
     val workspaceDiffs: StateFlow<List<FileDiff>> = repository.workspaceDiffs
     val conversationSessions: StateFlow<List<ConversationSession>> = repository.conversationSessions
+    val conversationId: StateFlow<String?> = repository.conversationId
 
     // Active Dev Servers (In-App Preview) & Workspace Quick Scripts
     val activeDevServers: StateFlow<List<ActiveDevServer>> = repository.activeDevServers
@@ -175,6 +176,10 @@ class AntigravityViewModel(
 
     fun cancelAgentTask() {
         repository.cancelAgentTask()
+    }
+
+    fun requestConversationSessions() {
+        repository.requestConversationSessions()
     }
 
     fun requestChatHistory() {

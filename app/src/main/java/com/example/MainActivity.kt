@@ -9,8 +9,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -61,7 +66,19 @@ private fun triggerHapticFeedback(context: android.content.Context, preferences:
             context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+            val effect = if (pattern.size == 2 && pattern[0] == 0L) {
+                android.os.VibrationEffect.createOneShot(pattern[1], android.os.VibrationEffect.DEFAULT_AMPLITUDE)
+            } else {
+                android.os.VibrationEffect.createWaveform(pattern, -1)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val attrs = android.os.VibrationAttributes.Builder()
+                    .setUsage(android.os.VibrationAttributes.USAGE_ALARM)
+                    .build()
+                vibrator?.vibrate(effect, attrs)
+            } else {
+                vibrator?.vibrate(effect)
+            }
         } else {
             @Suppress("DEPRECATION")
             vibrator?.vibrate(pattern, -1)
@@ -89,6 +106,8 @@ fun AntigravityApp(
     val pendingApproval by viewModel.pendingApproval.collectAsStateWithLifecycle()
     val workspaceDiffs by viewModel.workspaceDiffs.collectAsStateWithLifecycle()
     val conversationSessions by viewModel.conversationSessions.collectAsStateWithLifecycle()
+    val conversationId by viewModel.conversationId.collectAsStateWithLifecycle()
+    val chatListState = rememberLazyListState()
     val liveTerminalOutput by viewModel.liveTerminalOutput.collectAsStateWithLifecycle()
 
     // Dev Servers (Live Preview) & Workspace Scripts
@@ -141,6 +160,9 @@ fun AntigravityApp(
                 )
             )
         }
+        if (connectionPreferences.isAutoReconnectEnabled()) {
+            viewModel.reconnectLastKnown()
+        }
     }
 
     LaunchedEffect(config.status) {
@@ -188,29 +210,51 @@ fun AntigravityApp(
             )
         },
         bottomBar = {
-            // 5-Tab Bottom Navigation Bar (Linear Style)
-            NavigationBar(
+            // Sleek Compact Dock Navigation (52dp Height)
+            Surface(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .testTag("bottom_navigation_bar")
                     .border(androidx.compose.foundation.BorderStroke(1.dp, CardBorder)),
-                containerColor = CardSurface,
-                windowInsets = WindowInsets.navigationBars
+                color = CardSurface
             ) {
-                DashboardTab.values().forEach { tab ->
-                    val isSelected = uiState.selectedTab == tab
-                    val (icon, label) = when (tab) {
-                        DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
-                        DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
-                        DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
-                        DashboardTab.TERMINAL -> (if (isSelected) Icons.Filled.Terminal else Icons.Outlined.Terminal) to "Terminal"
-                        DashboardTab.PREVIEW -> (if (isSelected) Icons.Filled.Language else Icons.Outlined.Language) to "Preview"
-                    }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .height(52.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DashboardTab.values().forEach { tab ->
+                        val isSelected = uiState.selectedTab == tab
+                        val (icon, label) = when (tab) {
+                            DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
+                            DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
+                            DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
+                            DashboardTab.TERMINAL -> (if (isSelected) Icons.Filled.Terminal else Icons.Outlined.Terminal) to "Terminal"
+                            DashboardTab.PREVIEW -> (if (isSelected) Icons.Filled.Language else Icons.Outlined.Language) to "Preview"
+                        }
+                        val activeColor = AccentPrimary
+                        val inactiveColor = ContentSecondary
 
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { viewModel.selectTab(tab) },
-                        modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"),
-                        icon = {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.selectTab(tab)
+                                    if (tab == DashboardTab.REVIEW) {
+                                        viewModel.requestWorkspaceDiffs()
+                                    } else if (tab == DashboardTab.CHAT && chatMessages.isEmpty()) {
+                                        viewModel.requestChatHistory()
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
                             if (tab == DashboardTab.PREVIEW && activeDevServers.isNotEmpty()) {
                                 BadgedBox(
                                     badge = {
@@ -227,7 +271,9 @@ fun AntigravityApp(
                                 ) {
                                     Icon(
                                         imageVector = icon,
-                                        contentDescription = label
+                                        contentDescription = label,
+                                        tint = if (isSelected) activeColor else inactiveColor,
+                                        modifier = Modifier.size(19.dp)
                                     )
                                 }
                             } else if (tab == DashboardTab.REVIEW && workspaceDiffs.isNotEmpty()) {
@@ -246,33 +292,31 @@ fun AntigravityApp(
                                 ) {
                                     Icon(
                                         imageVector = icon,
-                                        contentDescription = label
+                                        contentDescription = label,
+                                        tint = if (isSelected) activeColor else inactiveColor,
+                                        modifier = Modifier.size(19.dp)
                                     )
                                 }
                             } else {
                                 Icon(
                                     imageVector = icon,
-                                    contentDescription = label
+                                    contentDescription = label,
+                                    tint = if (isSelected) activeColor else inactiveColor,
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
-                        },
-                        label = {
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    fontSize = 10.sp
-                                )
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) activeColor else inactiveColor
+                                ),
+                                maxLines = 1
                             )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = AccentPrimary,
-                            selectedTextColor = AccentPrimary,
-                            unselectedIconColor = ContentSecondary,
-                            unselectedTextColor = ContentSecondary,
-                            indicatorColor = AccentPrimarySoft
-                        )
-                    )
+                        }
+                    }
                 }
             }
         }
@@ -287,6 +331,8 @@ fun AntigravityApp(
                 // Tab 1: AI Agent Live Chat & Human-in-the-Loop Approvals
                 DashboardTab.CHAT -> {
                     AgentChatScreen(
+                        listState = chatListState,
+                        conversationId = conversationId,
                         messages = chatMessages,
                         isStreaming = isAgentStreaming,
                         activeToolBadge = agentToolBadge,
@@ -303,6 +349,10 @@ fun AntigravityApp(
                         onToggleChatFocusMode = {
                             viewModel.toggleChatFocusMode()
                             Toast.makeText(context, if (!isChatFocusMode) "Mengaktifkan Mode Fokus Chat di PC..." else "Mengembalikan layout PC ke normal...", Toast.LENGTH_SHORT).show()
+                        },
+                        onRefreshChat = {
+                            viewModel.requestChatHistory()
+                            Toast.makeText(context, "Menyinkronkan obrolan...", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

@@ -53,6 +53,7 @@ class AntigravityRepository(
     fun requestWorkspaceInfo() = client.requestWorkspaceInfo()
     fun requestWorkspaceFiles() = client.requestWorkspaceFiles()
     fun requestChatHistory() = client.requestChatHistory()
+    fun requestConversationSessions() = client.requestConversationSessions()
     fun requestReadFile(relativePath: String) = client.requestReadFile(relativePath)
     fun triggerSaveAll() = client.triggerSaveAll()
     fun closeCodeViewer() = client.closeCodeViewer()

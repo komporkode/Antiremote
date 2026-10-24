@@ -29,6 +29,66 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 
+
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+
+fun parseAnsiTerminalOutput(raw: String): AnnotatedString {
+    return buildAnnotatedString {
+        val pattern = Regex("\u001B\\[([0-9;]*)m")
+        var cursor = 0
+        var currentColor = Color(0xFFD4D4D4)
+        var isBold = false
+
+        for (match in pattern.findAll(raw)) {
+            val start = match.range.first
+            val end = match.range.last + 1
+
+            if (start > cursor) {
+                val text = raw.substring(cursor, start)
+                val s = length
+                append(text)
+                addStyle(
+                    SpanStyle(
+                        color = currentColor,
+                        fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+                    ),
+                    s,
+                    length
+                )
+            }
+
+            val codes = match.groups[1]?.value?.split(";")?.mapNotNull { it.toIntOrNull() } ?: listOf(0)
+            for (code in codes) {
+                when (code) {
+                    0 -> { currentColor = Color(0xFFD4D4D4); isBold = false }
+                    1 -> isBold = true
+                    31, 91 -> currentColor = Color(0xFFF87171) // Red
+                    32, 92 -> currentColor = Color(0xFF4ADE80) // Green
+                    33, 93 -> currentColor = Color(0xFFFBBF24) // Yellow
+                    34, 94 -> currentColor = Color(0xFF60A5FA) // Blue
+                    35, 95 -> currentColor = Color(0xFFC084FC) // Magenta
+                    36, 96 -> currentColor = Color(0xFF38BDF8) // Cyan
+                    37, 97 -> currentColor = Color(0xFFF1F5F9) // White
+                    else -> {}
+                }
+            }
+            cursor = end
+        }
+        if (cursor < raw.length) {
+            val s = length
+            append(raw.substring(cursor))
+            addStyle(SpanStyle(color = currentColor, fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal), s, length)
+        }
+    }
+}
+
 @Composable
 fun LiveTerminalScreen(
     output: String,
@@ -202,7 +262,7 @@ fun LiveTerminalScreen(
             }
         }
 
-        // Terminal Console Viewport
+        // Terminal Console Viewport (Pro Dark + ANSI Colors + Smart Error AI)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -212,12 +272,18 @@ fun LiveTerminalScreen(
                 .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
                 .padding(12.dp)
         ) {
-            val cleanOutput = remember(output) {
-                // Strip ANSI escape codes for clean mobile rendering
-                output.replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
+            val styledOutput = remember(output) {
+                parseAnsiTerminalOutput(output)
             }
 
-            if (cleanOutput.isBlank()) {
+            val hasError = remember(output) {
+                output.contains("error", ignoreCase = true) ||
+                output.contains("failed", ignoreCase = true) ||
+                output.contains("exception", ignoreCase = true) ||
+                output.contains("fatal", ignoreCase = true)
+            }
+
+            if (output.isBlank()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -234,18 +300,54 @@ fun LiveTerminalScreen(
                 }
             } else {
                 Text(
-                    text = cleanOutput,
+                    text = styledOutput,
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(verticalScrollState)
                         .horizontalScroll(horizontalScrollState),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFD4D4D4),
                         fontSize = currentFontSize.sp,
                         lineHeight = (currentFontSize * 1.4f).sp
                     )
                 )
+            }
+
+            // Smart Floating Banner: Tanya AI untuk Perbaiki Error
+            if (hasError && onRequestAiFix != null) {
+                Surface(
+                    onClick = {
+                        val clean = output.replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
+                        val tailLines = clean.lines().takeLast(30).joinToString("\n").trim()
+                        onRequestAiFix("Tolong periksa dan perbaiki error terminal berikut:\n```\n$tailLines\n```")
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 6.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF7F1D1D),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444)),
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFFCA5A5),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Error terdeteksi • Tanya AI untuk Perbaiki",
+                            color = Color(0xFFFEE2E2),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         }
 

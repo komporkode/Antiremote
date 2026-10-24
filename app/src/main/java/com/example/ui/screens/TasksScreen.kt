@@ -46,8 +46,6 @@ fun TasksScreen(
     onOpenPreview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showLogs by remember { mutableStateOf(false) }
-
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -56,19 +54,20 @@ fun TasksScreen(
             .testTag("tasks_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Section 1: Agent Task Tracker (Slim Banner when IDLE, Rich Card when Active)
+        // Section 1: AI Agent Plan & Subtask Tracker
         item {
-            if (agentTask.state == AgentExecutionState.IDLE) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    color = CardSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = CardSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -80,156 +79,127 @@ fun TasksScreen(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(AccentSuccess)
+                                    .background(
+                                        when (agentTask.state) {
+                                            AgentExecutionState.IDLE -> AccentSuccess
+                                            AgentExecutionState.COMPLETED -> AccentSuccess
+                                            AgentExecutionState.ERROR -> AccentDanger
+                                            else -> AccentPrimary
+                                        }
+                                    )
                             )
-                            Column {
-                                Text(
-                                    text = "AI Agent Workstation Siap",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        color = ContentPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
-                                    )
+                            Text(
+                                text = "RENCANA KERJA AI AGENT",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = ContentPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    fontSize = 11.sp
                                 )
-                                Text(
-                                    text = "Ketik instruksi di Chat untuk menjalankan tugas",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = ContentTertiary,
-                                        fontSize = 10.sp
-                                    )
-                                )
-                            }
+                            )
                         }
 
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = AccentSuccessSoft
+                            color = when (agentTask.state) {
+                                AgentExecutionState.IDLE -> AccentSuccessSoft
+                                AgentExecutionState.COMPLETED -> AccentSuccessSoft
+                                AgentExecutionState.ERROR -> AccentDangerSoft
+                                AgentExecutionState.WAITING_APPROVAL -> AccentWarningSoft
+                                else -> AccentPrimarySoft
+                            }
                         ) {
                             Text(
-                                text = "SIAP",
+                                text = when (agentTask.state) {
+                                    AgentExecutionState.IDLE -> "SIAP"
+                                    AgentExecutionState.THINKING -> "BERPIKIR"
+                                    AgentExecutionState.WRITING_CODE -> "MENULIS KODE"
+                                    AgentExecutionState.EXECUTING_COMMAND -> "EKSEKUSI ALAT"
+                                    AgentExecutionState.WAITING_APPROVAL -> "MENUNGGU IZIN"
+                                    AgentExecutionState.COMPLETED -> "SELESAI"
+                                    AgentExecutionState.ERROR -> "ERROR"
+                                    else -> "AKTIF"
+                                },
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = AccentSuccess,
+                                    color = when (agentTask.state) {
+                                        AgentExecutionState.IDLE -> AccentSuccess
+                                        AgentExecutionState.COMPLETED -> AccentSuccess
+                                        AgentExecutionState.ERROR -> AccentDanger
+                                        AgentExecutionState.WAITING_APPROVAL -> AccentWarning
+                                        else -> AccentPrimary
+                                    },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 10.sp
                                 )
                             )
                         }
                     }
-                }
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = CardSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-                ) {
+
+                    Text(
+                        text = agentTask.title.ifEmpty { "Pengembangan & Refactoring Workstation" },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = ContentPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    )
+
+                    Text(
+                        text = agentTask.currentStepDescription.ifEmpty { "Siap menerima instruksi dari Chat." },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = ContentSecondary,
+                            fontSize = 12.sp
+                        )
+                    )
+
+                    // Progress Bar
+                    LinearProgressIndicator(
+                        progress = { agentTask.progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = AccentPrimary,
+                        trackColor = CardSurfaceVariant
+                    )
+
+                    // Subtask / Checklist Items
                     Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CheckCircleOutline,
-                                    contentDescription = null,
-                                    tint = AccentPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Tugas AI Sedang Berjalan",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        color = ContentPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = when (agentTask.state) {
-                                    AgentExecutionState.COMPLETED -> AccentSuccessSoft
-                                    AgentExecutionState.ERROR -> AccentDangerSoft
-                                    AgentExecutionState.WAITING_APPROVAL -> AccentWarningSoft
-                                    else -> AccentPrimarySoft
-                                }
-                            ) {
-                                Text(
-                                    text = when (agentTask.state) {
-                                        AgentExecutionState.THINKING -> "Berpikir"
-                                        AgentExecutionState.WRITING_CODE -> "Menulis Kode"
-                                        AgentExecutionState.EXECUTING_COMMAND -> "Eksekusi Alat"
-                                        AgentExecutionState.WAITING_APPROVAL -> "Menunggu Izin"
-                                        AgentExecutionState.COMPLETED -> "Selesai"
-                                        AgentExecutionState.ERROR -> "Error"
-                                        else -> "Aktif"
-                                    },
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = when (agentTask.state) {
-                                            AgentExecutionState.COMPLETED -> AccentSuccess
-                                            AgentExecutionState.ERROR -> AccentDanger
-                                            AgentExecutionState.WAITING_APPROVAL -> AccentWarning
-                                            else -> AccentPrimary
-                                        },
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 10.sp
-                                    )
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = agentTask.title.ifEmpty { "Pengembangan Fitur & Refactoring" },
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = ContentPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
+                        SubtaskCheckItem(
+                            title = "Analisis Workspace & Rencana",
+                            isDone = agentTask.state != AgentExecutionState.IDLE
                         )
-
-                        Text(
-                            text = agentTask.currentStepDescription.ifEmpty { "Memproses instruksi..." },
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = ContentSecondary,
-                                fontSize = 12.sp
-                            )
+                        SubtaskCheckItem(
+                            title = "Eksekusi Alat & Modifikasi Berkas",
+                            isDone = agentTask.state == AgentExecutionState.COMPLETED,
+                            isInProgress = agentTask.state in listOf(AgentExecutionState.WRITING_CODE, AgentExecutionState.EXECUTING_COMMAND)
                         )
-
-                        // Linear Progress
-                        LinearProgressIndicator(
-                            progress = { agentTask.progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = AccentPrimary,
-                            trackColor = CardSurfaceVariant
+                        SubtaskCheckItem(
+                            title = "Verifikasi & Selesai",
+                            isDone = agentTask.state == AgentExecutionState.COMPLETED
                         )
                     }
                 }
             }
         }
 
-        // Section 1b: Dev Server Status & Real Controls
+        // Section 2: Dev Servers & Background Processes Monitor
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = CardSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -244,14 +214,15 @@ fun TasksScreen(
                                 imageVector = Icons.Outlined.Dns,
                                 contentDescription = null,
                                 tint = if (activeServers.isNotEmpty()) AccentSuccess else ContentTertiary,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "Dev Server Workstation",
-                                style = MaterialTheme.typography.titleSmall.copy(
+                                text = "DEV SERVERS & PROSES BACKGROUND",
+                                style = MaterialTheme.typography.labelSmall.copy(
                                     color = ContentPrimary,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
+                                    letterSpacing = 0.5.sp,
+                                    fontSize = 11.sp
                                 )
                             )
                         }
@@ -277,19 +248,19 @@ fun TasksScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(CardSurfaceVariant)
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(6.dp)
+                                            .size(7.dp)
                                             .clip(CircleShape)
                                             .background(AccentSuccess)
                                     )
@@ -307,7 +278,7 @@ fun TasksScreen(
                                             text = server.lanUrl.ifEmpty { server.localUrl },
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 color = ContentTertiary,
-                                                fontSize = 9.sp
+                                                fontSize = 9.5.sp
                                             )
                                         )
                                     }
@@ -315,7 +286,7 @@ fun TasksScreen(
 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     // Hot Reload ('r')
                                     Surface(
@@ -326,7 +297,7 @@ fun TasksScreen(
                                         color = AccentPrimarySoft
                                     ) {
                                         Text(
-                                            text = "⚡ Reload",
+                                            text = "Reload",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = AccentPrimary,
@@ -345,7 +316,7 @@ fun TasksScreen(
                                         color = AccentSuccessSoft
                                     ) {
                                         Text(
-                                            text = "🌐 Preview",
+                                            text = "Preview",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = AccentSuccess,
@@ -364,7 +335,7 @@ fun TasksScreen(
                                         color = AccentDangerSoft
                                     ) {
                                         Text(
-                                            text = "✕",
+                                            text = "Kill",
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = AccentDanger,
@@ -380,14 +351,14 @@ fun TasksScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(CardSurfaceVariant)
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Tidak ada dev server berjalan",
+                                text = "Tidak ada dev server aktif",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = ContentTertiary,
                                     fontSize = 11.sp
@@ -401,7 +372,7 @@ fun TasksScreen(
                                 color = AccentPrimarySoft
                             ) {
                                 Text(
-                                    text = "▶ Run Dev",
+                                    text = "Run Dev",
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = AccentPrimary,
@@ -416,205 +387,59 @@ fun TasksScreen(
             }
         }
 
-        // Section 2: Conversation Sessions & Switcher
+        // Section 3: Quick Developer Actions Bar
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Riwayat Sesi Percakapan",
-                    style = MaterialTheme.typography.titleSmall.copy(
+                    text = "AKSI CEPAT WORKSTATION",
+                    style = MaterialTheme.typography.labelSmall.copy(
                         color = ContentPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        letterSpacing = 0.5.sp,
+                        fontSize = 11.sp
                     )
                 )
 
-                Button(
-                    onClick = onNewSession,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Percakapan Baru", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-
-        items(sessions, key = { it.id }) { session ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSelectSession(session.id) },
-                shape = RoundedCornerShape(10.dp),
-                color = CardSurface,
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (session.isActive) AccentPrimary else CardBorder
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (session.isActive) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(AccentPrimary)
-                                )
-                            }
-                            Text(
-                                text = session.title.ifEmpty { "Sesi ${session.id.take(8)}" },
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    color = if (session.isActive) ContentPrimary else ContentSecondary,
-                                    fontWeight = if (session.isActive) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                ),
-                                maxLines = 1
-                            )
-                        }
-
-                        if (session.lastMessage.isNotBlank()) {
-                            Text(
-                                text = session.lastMessage,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = ContentTertiary,
-                                    fontSize = 11.sp
-                                ),
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    if (session.isActive) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = AccentPrimarySoft
-                        ) {
-                            Text(
-                                text = "Aktif",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = AccentPrimary,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section 3: Quick Developer Actions
-        item {
-            Text(
-                text = "Aksi Cepat Workstation",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    color = ContentPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            )
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                QuickActionButton(
-                    label = "Save All",
-                    icon = Icons.Outlined.Save,
-                    onClick = onSaveAll,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionButton(
-                    label = "Run Dev",
-                    icon = Icons.Outlined.PlayArrow,
-                    onClick = onRunDev,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionButton(
-                    label = "Build",
-                    icon = Icons.Outlined.Build,
-                    onClick = onRunBuild,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                QuickActionButton(
-                    label = "Git Pull",
-                    icon = Icons.Outlined.CloudDownload,
-                    onClick = onGitPull,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionButton(
-                    label = "Git Push",
-                    icon = Icons.Outlined.CloudUpload,
-                    onClick = onGitPush,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionButton(
-                    label = if (isChatFocusMode) "Exit Focus" else "Focus Chat",
-                    icon = if (isChatFocusMode) Icons.Default.CloseFullscreen else Icons.Outlined.CenterFocusStrong,
-                    onClick = onToggleChatFocusMode,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Section 3b: Dynamic Workspace Scripts (from package.json & tasks.json)
-        if (workspaceScripts.isNotEmpty()) {
-            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PlayCircleOutline,
-                        contentDescription = null,
-                        tint = AccentPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Script Workspace Terdeteksi (${workspaceScripts.size})",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            color = ContentPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+                    QuickActionButton("Save All", Icons.Outlined.Save, onSaveAll, Modifier.weight(1f))
+                    QuickActionButton("Git Pull", Icons.Outlined.CloudDownload, onGitPull, Modifier.weight(1f))
+                    QuickActionButton("Git Push", Icons.Outlined.CloudUpload, onGitPush, Modifier.weight(1f))
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    QuickActionButton("Run Dev", Icons.Outlined.PlayArrow, onRunDev, Modifier.weight(1f))
+                    QuickActionButton("Build", Icons.Outlined.Build, onRunBuild, Modifier.weight(1f))
+                    QuickActionButton(
+                        if (isChatFocusMode) "Reset PC" else "Fokus PC",
+                        Icons.Outlined.FitScreen,
+                        onToggleChatFocusMode,
+                        Modifier.weight(1f)
                     )
                 }
             }
+        }
 
-            items(workspaceScripts, key = { it.name + it.command }) { script ->
+        // Section 4: Workspace Scripts (package.json / tasks.json)
+        if (workspaceScripts.isNotEmpty()) {
+            item {
+                Text(
+                    text = "SKRIP WORKSPACE (${workspaceScripts.size})",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = ContentPrimary,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        fontSize = 11.sp
+                    )
+                )
+            }
+
+            items(workspaceScripts, key = { it.name }) { script ->
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -693,79 +518,42 @@ fun TasksScreen(
                 }
             }
         }
+    }
+}
 
-        // Section 4: Collapsible Logs
-        item {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { showLogs = !showLogs },
-                shape = RoundedCornerShape(10.dp),
-                color = CardSurface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(imageVector = Icons.Outlined.Terminal, contentDescription = null, tint = ContentSecondary, modifier = Modifier.size(16.dp))
-                        Text(
-                            text = "Log Eksekusi Sistem (${terminalLogs.size})",
-                            style = MaterialTheme.typography.bodySmall.copy(color = ContentPrimary, fontWeight = FontWeight.Medium)
-                        )
-                    }
-
-                    Icon(
-                        imageVector = if (showLogs) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = ContentTertiary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
-        if (showLogs) {
-            item {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 240.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = AppBg,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
-                ) {
-                    LazyColumn(
-                        modifier = Modifier.padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(terminalLogs.takeLast(20)) { log ->
-                            Text(
-                                text = "[${log.timestamp}] ${log.message}",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = when (log.level) {
-                                        LogLevel.ERROR -> AccentDanger
-                                        LogLevel.SUCCESS -> AccentSuccess
-                                        LogLevel.WARN -> AccentWarning
-                                        else -> ContentSecondary
-                                    },
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 10.sp
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
+@Composable
+private fun SubtaskCheckItem(
+    title: String,
+    isDone: Boolean = false,
+    isInProgress: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = when {
+                isDone -> Icons.Default.CheckCircle
+                isInProgress -> Icons.Default.Pending
+                else -> Icons.Outlined.RadioButtonUnchecked
+            },
+            contentDescription = null,
+            tint = when {
+                isDone -> AccentSuccess
+                isInProgress -> AccentPrimary
+                else -> ContentTertiary
+            },
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = if (isDone) ContentPrimary else ContentSecondary,
+                fontSize = 12.sp,
+                fontWeight = if (isInProgress) FontWeight.SemiBold else FontWeight.Normal
+            )
+        )
     }
 }
 

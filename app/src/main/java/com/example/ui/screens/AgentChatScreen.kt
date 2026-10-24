@@ -64,9 +64,11 @@ fun AgentChatScreen(
     onSlashCommandClick: (String) -> Unit,
     isChatFocusMode: Boolean = false,
     onToggleChatFocusMode: () -> Unit = {},
+    onRefreshChat: () -> Unit = {},
+    conversationId: String? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -101,10 +103,30 @@ fun AgentChatScreen(
         }
     }
 
-    // Auto-scroll to bottom saat potongan teks baru masuk (streaming chunk)
+        var hasInitiallyScrolledForConv by remember(conversationId) { mutableStateOf(false) }
+    var previousMessageCount by remember { mutableIntStateOf(0) }
+
+    // 1. Instant scroll ke paling bawah seketika saat chat dibuka atau saat berganti percakapan
+    LaunchedEffect(conversationId, displayMessages.size) {
+        if (displayMessages.isNotEmpty() && !hasInitiallyScrolledForConv) {
+            listState.scrollToItem(displayMessages.size - 1)
+            hasInitiallyScrolledForConv = true
+            previousMessageCount = displayMessages.size
+        }
+    }
+
+    // 2. Auto-scroll saat pesan baru masuk atau saat AI sedang streaming token
     LaunchedEffect(displayMessages.size, displayMessages.lastOrNull()?.text?.length, activeToolBadge) {
-        if (displayMessages.isNotEmpty()) {
-            listState.animateScrollToItem(displayMessages.size - 1)
+        if (displayMessages.isNotEmpty() && hasInitiallyScrolledForConv) {
+            val isNewMessage = displayMessages.size > previousMessageCount
+            previousMessageCount = displayMessages.size
+
+            val isNearBottom = !listState.canScrollForward ||
+                (listState.layoutInfo.totalItemsCount - 1 - listState.firstVisibleItemIndex) <= 2
+
+            if (isNewMessage || isStreaming || isNearBottom) {
+                listState.scrollToItem(displayMessages.size - 1)
+            }
         }
     }
 
@@ -161,6 +183,17 @@ fun AgentChatScreen(
                             fontSize = 11.sp
                         )
                     )
+                    IconButton(
+                        onClick = onRefreshChat,
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sinkronkan Chat",
+                            tint = ContentSecondary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
                 }
 
                 // Focus Chat Mode Toggle Chip for PC IDE
@@ -263,12 +296,7 @@ fun AgentChatScreen(
             // Floating Down Arrow Button (Scroll to Bottom)
             val showScrollToBottom by remember {
                 derivedStateOf {
-                    val total = displayMessages.size
-                    if (total <= 1) false
-                    else {
-                        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        lastVisible < total - 2
-                    }
+                    listState.canScrollForward
                 }
             }
 

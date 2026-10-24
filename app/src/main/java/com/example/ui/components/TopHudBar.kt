@@ -105,55 +105,12 @@ fun TopHudBar(
                 )
             }
 
-            // Right: Actions (Save All + Connection Status Pill)
+            // Right: High-Signal Actions (Connection Status Pill + Settings)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Mode Meja: Layar Selalu Aktif (Keep Screen On)
-                IconButton(
-                    onClick = onToggleKeepScreenOn,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .testTag("btn_keep_screen_on")
-                ) {
-                    Icon(
-                        imageVector = if (isKeepScreenOn) Icons.Filled.Lightbulb else Icons.Outlined.Lightbulb,
-                        contentDescription = if (isKeepScreenOn) "Mode Meja Aktif (Layar Tidak Sleep)" else "Aktifkan Mode Meja",
-                        tint = if (isKeepScreenOn) AccentWarning else ContentSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                // Quick Save All Button
-                IconButton(
-                    onClick = onSaveAllClick,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Save,
-                        contentDescription = "Simpan Semua",
-                        tint = ContentSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                // Settings Button
-                IconButton(
-                    onClick = onOpenSettingsClick,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .testTag("btn_open_settings")
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Pengaturan",
-                        tint = ContentSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                // Sleek Connection Status Pill
+                // Sleek Connection Status Pill (1-Tap Connection Manager)
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
@@ -178,11 +135,26 @@ fun TopHudBar(
                             text = statusTitle,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = ContentPrimary,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp
                             )
                         )
                     }
+                }
+
+                // Settings Button
+                IconButton(
+                    onClick = onOpenSettingsClick,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .testTag("btn_open_settings")
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Pengaturan",
+                        tint = ContentSecondary,
+                        modifier = Modifier.size(17.dp)
+                    )
                 }
             }
         }

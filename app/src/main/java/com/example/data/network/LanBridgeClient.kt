@@ -237,6 +237,8 @@ class LanBridgeClient(
 
                 // Simpan profil koneksi terakhir ke SharedPreferences
                 connectionPreferences?.saveConnection(target, port, pin)
+                requestWorkspaceDiffs()
+                requestDevServers()
 
                 // Jika menyertakan PIN keamanan, kirim pesan otentikasi seketika
                 if (!pin.isNullOrBlank()) {
@@ -253,6 +255,7 @@ class LanBridgeClient(
                 requestWorkspaceInfo()
                 requestWorkspaceFiles()
                 requestChatHistory()
+                requestConversationSessions()
                 requestWorkspaceScripts()
                 requestDevServers()
                 requestLayoutState()
@@ -533,6 +536,10 @@ class LanBridgeClient(
 
                 // 8. RIWAYAT CHAT LENGKAP DARI ANTIGRAVITY IDE (BARU!)
                 "CHAT_HISTORY", "CONVERSATION_HISTORY" -> {
+                    val convId = json.optString("conversationId", "")
+                    if (convId.isNotEmpty()) {
+                        _conversationId.value = convId
+                    }
                     val messagesArray = json.optJSONArray("messages")
                     if (messagesArray != null && messagesArray.length() > 0) {
                         val historyList = mutableListOf<AgentChatMessage>()
@@ -633,11 +640,12 @@ class LanBridgeClient(
 
                 // 13. PERMINTAAN PERSETUJUAN DARI AGENT (HUMAN-IN-THE-LOOP)
                 "AGENT_APPROVAL_REQUEST" -> {
-                    val reqId = json.optString("id", UUID.randomUUID().toString())
-                    val action = json.optString("action", "TERMINAL_CMD")
-                    val title = json.optString("title", "Konfirmasi Aksi")
-                    val detail = json.optString("detail", "")
-                    val optionsArr = json.optJSONArray("options")
+                    val approvalObj = json.optJSONObject("approval") ?: json
+                    val reqId = approvalObj.optString("id", UUID.randomUUID().toString())
+                    val action = approvalObj.optString("actionType", approvalObj.optString("action", "TERMINAL_CMD"))
+                    val title = approvalObj.optString("title", "Konfirmasi Aksi")
+                    val detail = approvalObj.optString("detail", "")
+                    val optionsArr = approvalObj.optJSONArray("options")
                     val optionsList = mutableListOf<String>()
                     if (optionsArr != null) {
                         for (i in 0 until optionsArr.length()) {
@@ -705,9 +713,7 @@ class LanBridgeClient(
                                 )
                             )
                         }
-                        if (diffList.isNotEmpty()) {
-                            _workspaceDiffs.value = diffList
-                        }
+                        _workspaceDiffs.value = diffList
                     }
                 }
 
@@ -971,6 +977,13 @@ class LanBridgeClient(
     fun requestChatHistory() {
         val payload = JSONObject().apply {
             put("type", "GET_CHAT_HISTORY")
+        }
+        webSocket?.send(payload.toString())
+    }
+
+    fun requestConversationSessions() {
+        val payload = JSONObject().apply {
+            put("type", "GET_CONVERSATION_SESSIONS")
         }
         webSocket?.send(payload.toString())
     }
