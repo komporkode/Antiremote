@@ -60,16 +60,7 @@ class LanBridgeClient(
     val files: StateFlow<List<WorkspaceFile>> = _files.asStateFlow()
 
     // Upgraded Remote Control AI Agent & Workspace states
-    private val _chatMessages = MutableStateFlow<List<AgentChatMessage>>(listOf(
-        AgentChatMessage(
-            sender = ChatSender.SYSTEM,
-            text = "Tersambung ke Antigravity IDE (Port 9876). Chat dari PC & HP tersinkronisasi dua arah secara realtime."
-        ),
-        AgentChatMessage(
-            sender = ChatSender.AGENT,
-            text = "Halo! Saya AI Agent Antigravity. Chat ini terhubung langsung dengan IDE Antigravity di komputer Anda. Anda dapat mengetik instruksi dari sini atau langsung di PC!"
-        )
-    ))
+    private val _chatMessages = MutableStateFlow<List<AgentChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<AgentChatMessage>> = _chatMessages.asStateFlow()
 
     private val _isAgentStreaming = MutableStateFlow(false)
@@ -180,6 +171,9 @@ class LanBridgeClient(
             lastTarget = target
             lastPort = port
             lastPin = pin
+            _chatMessages.value = emptyList()
+            _conversationSessions.value = emptyList()
+            _conversationId.value = ""
             disconnectInternal()
         } else {
             webSocket?.close(1000, null)
@@ -537,12 +531,10 @@ class LanBridgeClient(
                 // 8. RIWAYAT CHAT LENGKAP DARI ANTIGRAVITY IDE (BARU!)
                 "CHAT_HISTORY", "CONVERSATION_HISTORY" -> {
                     val convId = json.optString("conversationId", "")
-                    if (convId.isNotEmpty()) {
-                        _conversationId.value = convId
-                    }
+                    _conversationId.value = convId
                     val messagesArray = json.optJSONArray("messages")
-                    if (messagesArray != null && messagesArray.length() > 0) {
-                        val historyList = mutableListOf<AgentChatMessage>()
+                    val historyList = mutableListOf<AgentChatMessage>()
+                    if (messagesArray != null) {
                         for (i in 0 until messagesArray.length()) {
                             val msgObj = messagesArray.getJSONObject(i)
                             val senderStr = msgObj.optString("sender", msgObj.optString("role", "agent")).lowercase()
@@ -568,10 +560,8 @@ class LanBridgeClient(
                                 )
                             )
                         }
-                        if (historyList.isNotEmpty()) {
-                            _chatMessages.value = historyList
-                        }
                     }
+                    _chatMessages.value = historyList
                 }
 
                 // 9. EVENT USER MENGETIK / MENGIRIM DARI IDE ANTIGRAVITY DI PC
@@ -720,8 +710,8 @@ class LanBridgeClient(
                 // 15. RIWAYAT SESI / MULTI-CONVERSATION
                 "CONVERSATION_SESSIONS", "SESSIONS_LIST" -> {
                     val sessArr = json.optJSONArray("sessions")
+                    val sessList = mutableListOf<ConversationSession>()
                     if (sessArr != null) {
-                        val sessList = mutableListOf<ConversationSession>()
                         for (i in 0 until sessArr.length()) {
                             val sObj = sessArr.getJSONObject(i)
                             sessList.add(
@@ -735,10 +725,8 @@ class LanBridgeClient(
                                 )
                             )
                         }
-                        if (sessList.isNotEmpty()) {
-                            _conversationSessions.value = sessList
-                        }
                     }
+                    _conversationSessions.value = sessList
                 }
 
                 // Fallbacks & Previous Commands
@@ -746,10 +734,8 @@ class LanBridgeClient(
                     val server = json.optString("server", "Antigravity Bridge")
                     val version = json.optString("version", "1.0.0")
                     val wsName = json.optString("workspaceName", "")
-                    if (wsName.isNotEmpty() && wsName != "No Workspace") {
-                        _connectionConfig.update { it.copy(workspaceName = wsName) }
-                        _workspaceInfo.update { it.copy(projectName = wsName) }
-                    }
+                    _connectionConfig.update { it.copy(workspaceName = wsName.ifEmpty { "No Workspace" }) }
+                    _workspaceInfo.update { it.copy(projectName = wsName.ifEmpty { "No Workspace" }) }
                     appendTerminalLog(LogLevel.SUCCESS, "[$server v$version] Siap menerima perintah.")
                 }
 
