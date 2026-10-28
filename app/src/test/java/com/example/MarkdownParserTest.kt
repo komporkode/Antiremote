@@ -23,4 +23,20 @@ class MarkdownParserTest {
 
         assertEquals("Lihat komit ini", annotated.text)
     }
+
+    @Test
+    fun testParseNestedLinkInsideBold() {
+        val input = "- **Header 1 (~48dp) di [AppPreviewScreen.kt](file:///d:/path/to/AppPreviewScreen.kt):**"
+        val annotated = parseInlineMarkdown(input)
+
+        assertEquals("- Header 1 (~48dp) di AppPreviewScreen.kt:", annotated.text)
+    }
+
+    @Test
+    fun testParseNestedCodeInsideBold() {
+        val input = "- **Ekstensi (`portManager.ts`) & Client (`LanBridgeClient.kt`):**"
+        val annotated = parseInlineMarkdown(input)
+
+        assertEquals("- Ekstensi (portManager.ts) & Client (LanBridgeClient.kt):", annotated.text)
+    }
 }

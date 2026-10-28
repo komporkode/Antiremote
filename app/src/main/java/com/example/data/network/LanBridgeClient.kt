@@ -531,7 +531,9 @@ class LanBridgeClient(
                 // 8. RIWAYAT CHAT LENGKAP DARI ANTIGRAVITY IDE (BARU!)
                 "CHAT_HISTORY", "CONVERSATION_HISTORY" -> {
                     val convId = json.optString("conversationId", "")
-                    _conversationId.value = convId
+                    if (convId.isNotBlank()) {
+                        _conversationId.value = convId
+                    }
                     val messagesArray = json.optJSONArray("messages")
                     val historyList = mutableListOf<AgentChatMessage>()
                     if (messagesArray != null) {
@@ -551,12 +553,24 @@ class LanBridgeClient(
                                 continue
                             }
 
+                            var approvalReq: AgentApprovalRequest? = null
+                            if (msgObj.has("approvalRequest")) {
+                                val aObj = msgObj.optJSONObject("approvalRequest")
+                                if (aObj != null) {
+                                    approvalReq = parseApprovalRequest(aObj)
+                                    if (approvalReq.status == ApprovalStatus.PENDING) {
+                                        _pendingApproval.value = approvalReq
+                                    }
+                                }
+                            }
+
                             historyList.add(
                                 AgentChatMessage(
                                     sender = sender,
                                     text = textContent,
                                     isStreaming = false,
-                                    toolBadge = badge
+                                    toolBadge = badge,
+                                    approvalRequest = approvalReq
                                 )
                             )
                         }
@@ -631,34 +645,41 @@ class LanBridgeClient(
                 // 13. PERMINTAAN PERSETUJUAN DARI AGENT (HUMAN-IN-THE-LOOP)
                 "AGENT_APPROVAL_REQUEST" -> {
                     val approvalObj = json.optJSONObject("approval") ?: json
-                    val reqId = approvalObj.optString("id", UUID.randomUUID().toString())
-                    val action = approvalObj.optString("actionType", approvalObj.optString("action", "TERMINAL_CMD"))
-                    val title = approvalObj.optString("title", "Konfirmasi Aksi")
-                    val detail = approvalObj.optString("detail", "")
-                    val optionsArr = approvalObj.optJSONArray("options")
-                    val optionsList = mutableListOf<String>()
-                    if (optionsArr != null) {
-                        for (i in 0 until optionsArr.length()) {
-                            optionsList.add(optionsArr.getString(i))
-                        }
-                    }
-                    val approval = AgentApprovalRequest(
-                        id = reqId,
-                        actionType = action,
-                        title = title,
-                        detail = detail,
-                        options = if (optionsList.isNotEmpty()) optionsList else listOf("Izinkan", "Tolak"),
-                        status = ApprovalStatus.PENDING
-                    )
+                    val approval = parseApprovalRequest(approvalObj)
                     _pendingApproval.value = approval
                     _chatMessages.update { list ->
                         list + AgentChatMessage(
                             sender = ChatSender.AGENT,
-                            text = "AI Agent meminta persetujuan: $title",
+                            text = if (approval.actionType == "ASK_QUESTION") "❓ AI Agent mengajukan pertanyaan: ${approval.title}" else "AI Agent meminta persetujuan: ${approval.title}",
                             approvalRequest = approval
                         )
                     }
-                    appendTerminalLog(LogLevel.WARN, "[APPROVAL REQUIRED] $title: $detail")
+                    appendTerminalLog(LogLevel.WARN, "[APPROVAL REQUIRED] ${approval.title}: ${approval.detail}")
+                }
+
+                // 13b. APPROVAL / PERTANYAAN TERSELESAIKAN (RESOLVED)
+                "AGENT_APPROVAL_RESOLVED" -> {
+                    val resolvedId = json.optString("id", "")
+                    val answer = json.optString("answer", "")
+                    val statusStr = json.optString("status", "APPROVED")
+                    val isApproved = statusStr != "REJECTED"
+
+                    if (_pendingApproval.value?.id == resolvedId || resolvedId.isEmpty()) {
+                        _pendingApproval.value = null
+                    }
+
+                    _chatMessages.update { list ->
+                        list.map { msg ->
+                            if (msg.approvalRequest?.id == resolvedId || (resolvedId.isEmpty() && msg.approvalRequest?.status == ApprovalStatus.PENDING)) {
+                                val updatedReq = msg.approvalRequest.copy(
+                                    status = if (isApproved) ApprovalStatus.APPROVED else ApprovalStatus.REJECTED,
+                                    selectedOption = answer.ifEmpty { msg.approvalRequest.selectedOption }
+                                )
+                                msg.copy(approvalRequest = updatedReq)
+                            } else msg
+                        }
+                    }
+                    appendTerminalLog(LogLevel.INFO, "[APPROVAL RESOLVED] Keputusan: $answer")
                 }
 
                 // 14. DATA REVIEW & DIFFS PERUBAHAN BERKAS
@@ -734,9 +755,33 @@ class LanBridgeClient(
                     val server = json.optString("server", "Antigravity Bridge")
                     val version = json.optString("version", "1.0.0")
                     val wsName = json.optString("workspaceName", "")
+                    val branch = json.optString("gitBranch", "main")
+                    val port = if (json.has("devPort") && !json.isNull("devPort")) json.optInt("devPort") else 3000
                     _connectionConfig.update { it.copy(workspaceName = wsName.ifEmpty { "No Workspace" }) }
-                    _workspaceInfo.update { it.copy(projectName = wsName.ifEmpty { "No Workspace" }) }
+                    _workspaceInfo.update {
+                        it.copy(
+                            projectName = wsName.ifEmpty { "No Workspace" },
+                            gitBranch = branch.ifEmpty { "main" },
+                            devPort = port
+                        )
+                    }
                     appendTerminalLog(LogLevel.SUCCESS, "[$server v$version] Siap menerima perintah.")
+                }
+
+                "WORKSPACE_STATE" -> {
+                    val projectName = json.optString("projectName", _workspaceInfo.value.projectName)
+                    val gitBranch = json.optString("gitBranch", _workspaceInfo.value.gitBranch)
+                    val devPort = if (json.has("devPort") && !json.isNull("devPort")) json.optInt("devPort") else _workspaceInfo.value.devPort
+                    val isSync = json.optBoolean("isSync", true)
+                    _connectionConfig.update { it.copy(workspaceName = projectName.ifEmpty { "No Workspace" }) }
+                    _workspaceInfo.update {
+                        it.copy(
+                            projectName = projectName.ifEmpty { "No Workspace" },
+                            gitBranch = gitBranch.ifEmpty { "main" },
+                            devPort = devPort,
+                            isSync = isSync
+                        )
+                    }
                 }
 
                 "COMMAND_RESULT" -> {
@@ -871,6 +916,39 @@ class LanBridgeClient(
      * 2. ANTIGRAVITY_COMMAND (Format resmi bridge workstation 'agy' dari spesifikasi teknis)
      * 3. USER_CHAT_MESSAGE (Sinkronisasi dua arah chat Antigravity IDE)
      */
+        /**
+     * Kirim Gambar ke AI Agent Antigravity di Workstation
+     */
+    fun sendChatImage(base64Data: String, fileName: String, prompt: String, conversationId: String? = null) {
+        val convId = conversationId ?: _conversationId.value
+        val userCaption = if (prompt.isNotBlank()) prompt.trim() else "Mohon analisa gambar ini."
+
+        _chatMessages.update {
+            it + AgentChatMessage(
+                sender = ChatSender.USER,
+                text = "📷 [$fileName]\n$userCaption"
+            )
+        }
+
+        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val payload = org.json.JSONObject().apply {
+                put("type", "USER_CHAT_IMAGE")
+                put("image", base64Data)
+                put("fileName", fileName)
+                put("prompt", userCaption)
+                if (convId != null) {
+                    put("conversationId", convId)
+                }
+            }
+            val sent = webSocket?.send(payload.toString()) ?: false
+            if (sent) {
+                _isAgentStreaming.value = true
+                _agentToolBadge.value = "Mengunggah gambar ke PC..."
+                appendTerminalLog(LogLevel.COMMAND, "[KIRIM GAMBAR] > $fileName ($userCaption)")
+            }
+        }
+    }
+
     fun sendAgentStreamPrompt(prompt: String, conversationId: String? = null) {
         val trimmed = prompt.trim()
         if (trimmed.isEmpty()) return
@@ -960,9 +1038,12 @@ class LanBridgeClient(
     /**
      * Minta Riwayat Chat Lengkap dari Antigravity IDE di PC
      */
-    fun requestChatHistory() {
+    fun requestChatHistory(convId: String? = null) {
         val payload = JSONObject().apply {
             put("type", "GET_CHAT_HISTORY")
+            if (!convId.isNullOrBlank()) {
+                put("conversationId", convId)
+            }
         }
         webSocket?.send(payload.toString())
     }
@@ -1419,16 +1500,55 @@ export default function App() {
         }
     }
 
+    private fun parseApprovalRequest(jsonObj: JSONObject): AgentApprovalRequest {
+        val reqId = jsonObj.optString("id", UUID.randomUUID().toString())
+        val action = jsonObj.optString("actionType", jsonObj.optString("action", "TERMINAL_CMD"))
+        val title = jsonObj.optString("title", "Konfirmasi Aksi")
+        val detail = jsonObj.optString("detail", jsonObj.optString("question", ""))
+        val statusStr = jsonObj.optString("status", "PENDING")
+        val status = when (statusStr.uppercase()) {
+            "APPROVED" -> ApprovalStatus.APPROVED
+            "REJECTED" -> ApprovalStatus.REJECTED
+            else -> ApprovalStatus.PENDING
+        }
+        val selectedOption = jsonObj.optString("selectedOption", "").ifEmpty { null }
+        val optionsArr = jsonObj.optJSONArray("options")
+        val optionsList = mutableListOf<String>()
+        if (optionsArr != null) {
+            for (i in 0 until optionsArr.length()) {
+                optionsList.add(optionsArr.getString(i))
+            }
+        }
+        return AgentApprovalRequest(
+            id = reqId,
+            actionType = action,
+            title = title,
+            detail = detail,
+            options = if (optionsList.isNotEmpty()) optionsList else listOf("Izinkan", "Tolak"),
+            status = status,
+            selectedOption = selectedOption
+        )
+    }
+
     /**
      * Kirim Respons Persetujuan (Human-in-the-Loop)
      */
     fun sendApprovalResponse(id: String, approved: Boolean, choice: String) {
         if (webSocket != null && !_connectionConfig.value.isDemoMode) {
+            val currentReq = _pendingApproval.value
+            val optionIdx = if (currentReq != null && currentReq.id == id) {
+                val idx = currentReq.options.indexOfFirst { it.equals(choice, ignoreCase = true) }
+                if (idx >= 0) idx + 1 else null
+            } else null
+
             val payload = JSONObject().apply {
                 put("type", "AGENT_APPROVAL_RESPONSE")
                 put("id", id)
                 put("approved", approved)
                 put("choice", choice)
+                if (optionIdx != null) {
+                    put("optionIndex", optionIdx)
+                }
             }
             webSocket?.send(payload.toString())
         }
@@ -1512,7 +1632,7 @@ export default function App() {
         _conversationSessions.update { list ->
             list.map { it.copy(isActive = it.id == sessionId) }
         }
-        requestChatHistory()
+        requestChatHistory(sessionId)
     }
 
     private fun parseDiffHunks(rawDiff: String): List<DiffHunk> {

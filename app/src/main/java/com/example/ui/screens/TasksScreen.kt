@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.*
@@ -517,6 +518,128 @@ fun TasksScreen(
                     }
                 }
             }
+
+        // Section 5: Multi-Session Conversation Manager
+        if (sessions.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "SESI PERCAKAPAN IDE (${sessions.size})",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = ContentPrimary,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onNewSession() },
+                        shape = RoundedCornerShape(4.dp),
+                        color = AccentPrimarySoft
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Sesi Baru",
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "Sesi Baru",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = AccentPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            items(sessions, key = { it.id }) { session ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onSelectSession(session.id) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (session.isActive) AccentPrimarySoft else CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (session.isActive) AccentPrimary else CardBorder
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (session.isActive) AccentSuccess else ContentTertiary)
+                            )
+                            Column {
+                                Text(
+                                    text = session.title,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = if (session.isActive) AccentPrimary else ContentPrimary,
+                                        fontWeight = if (session.isActive) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "ID: ${session.id.take(8)}...",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentTertiary,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        if (session.isActive) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = AccentPrimary
+                            ) {
+                                Text(
+                                    text = "AKTIF",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = androidx.compose.ui.graphics.Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         }
     }
 }

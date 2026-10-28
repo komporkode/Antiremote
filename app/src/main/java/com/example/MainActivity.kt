@@ -8,6 +8,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -230,7 +232,6 @@ fun AntigravityApp(
                         val isSelected = uiState.selectedTab == tab
                         val (icon, label) = when (tab) {
                             DashboardTab.CHAT -> (if (isSelected) Icons.Filled.Forum else Icons.Outlined.Forum) to "Chat"
-                            DashboardTab.REVIEW -> (if (isSelected) Icons.Filled.Code else Icons.Outlined.Code) to "Review"
                             DashboardTab.TASKS -> (if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle) to "Tasks"
                             DashboardTab.TERMINAL -> (if (isSelected) Icons.Filled.Terminal else Icons.Outlined.Terminal) to "Terminal"
                             DashboardTab.PREVIEW -> (if (isSelected) Icons.Filled.Language else Icons.Outlined.Language) to "Preview"
@@ -245,9 +246,7 @@ fun AntigravityApp(
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
                                     viewModel.selectTab(tab)
-                                    if (tab == DashboardTab.REVIEW) {
-                                        viewModel.requestWorkspaceDiffs()
-                                    } else if (tab == DashboardTab.CHAT && chatMessages.isEmpty()) {
+                                    if (tab == DashboardTab.CHAT && chatMessages.isEmpty()) {
                                         viewModel.requestChatHistory()
                                     }
                                 }
@@ -264,27 +263,6 @@ fun AntigravityApp(
                                         ) {
                                             Text(
                                                 text = activeDevServers.size.toString(),
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
-                                            )
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label,
-                                        tint = if (isSelected) activeColor else inactiveColor,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            } else if (tab == DashboardTab.REVIEW && workspaceDiffs.isNotEmpty()) {
-                                BadgedBox(
-                                    badge = {
-                                        Badge(
-                                            containerColor = AccentPrimary,
-                                            contentColor = Color.White
-                                        ) {
-                                            Text(
-                                                text = if (workspaceDiffs.size > 99) "99+" else workspaceDiffs.size.toString(),
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
                                             )
                                         }
@@ -327,7 +305,20 @@ fun AntigravityApp(
                 .padding(innerPadding)
                 .background(AppBg)
         ) {
-            when (uiState.selectedTab) {
+            AnimatedContent(
+                targetState = uiState.selectedTab,
+                transitionSpec = {
+                    if (targetState.ordinal > initialState.ordinal) {
+                        (slideInHorizontally { width -> width / 3 } + fadeIn(tween(200)))
+                            .togetherWith(slideOutHorizontally { width -> -width / 3 } + fadeOut(tween(150)))
+                    } else {
+                        (slideInHorizontally { width -> -width / 3 } + fadeIn(tween(200)))
+                            .togetherWith(slideOutHorizontally { width -> width / 3 } + fadeOut(tween(150)))
+                    }
+                },
+                label = "TabContentTransition"
+            ) { tab ->
+                when (tab) {
                 // Tab 1: AI Agent Live Chat & Human-in-the-Loop Approvals
                 DashboardTab.CHAT -> {
                     AgentChatScreen(
@@ -340,6 +331,7 @@ fun AntigravityApp(
                         inputPrompt = uiState.chatInput,
                         onInputChange = { viewModel.updateChatInput(it) },
                         onSendPrompt = { viewModel.sendChatPrompt(it) },
+                        onSendImage = { uri, prompt -> viewModel.sendChatImage(context, uri, prompt) },
                         onCancelAgent = { viewModel.cancelAgentTask() },
                         onApprovalResponse = { id, approved, choice ->
                             viewModel.sendApprovalResponse(id, approved, choice)
@@ -352,26 +344,12 @@ fun AntigravityApp(
                         },
                         onRefreshChat = {
                             viewModel.requestChatHistory()
-                            Toast.makeText(context, "Menyinkronkan obrolan...", Toast.LENGTH_SHORT).show()
+                            viewModel.requestConversationSessions()
+                            Toast.makeText(context, "Menyinkronkan obrolan dari IDE...", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
 
-                // Tab 2: Code Review & Unified Diff Viewer
-                DashboardTab.REVIEW -> {
-                    ReviewDiffScreen(
-                        diffs = workspaceDiffs,
-                        selectedDiffPath = uiState.selectedDiffPath,
-                        searchQuery = uiState.searchDiffQuery,
-                        onSearchQueryChange = { viewModel.updateSearchDiffQuery(it) },
-                        onSelectDiff = { viewModel.selectDiffPath(it) },
-                        onRefreshDiffs = { viewModel.requestWorkspaceDiffs() },
-                        onRequestAiRevision = { path ->
-                            viewModel.updateChatInput("Tolong periksa dan revisi berkas $path: ")
-                            viewModel.selectTab(DashboardTab.CHAT)
-                        }
-                    )
-                }
 
                 // Tab 3: Tasks, Multi-Session & Developer Shortcuts
                 DashboardTab.TASKS -> {
@@ -477,6 +455,7 @@ fun AntigravityApp(
             }
         }
     }
+}
 
     // Manual Connection Dialog
     if (uiState.showConnectionDialog) {

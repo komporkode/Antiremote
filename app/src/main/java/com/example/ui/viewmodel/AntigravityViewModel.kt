@@ -1,6 +1,8 @@
 package com.example.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import com.example.data.model.*
 import com.example.data.storage.SavedConnection
 import com.example.data.repository.AntigravityRepository
@@ -158,6 +160,54 @@ class AntigravityViewModel(
         _uiState.update { it.copy(chatInput = text) }
     }
 
+        fun sendChatImage(context: android.content.Context, uri: android.net.Uri, prompt: String? = null) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val res = uriToBase64(context, uri) ?: return@launch
+            val base64 = res.first
+            val fileName = res.second
+            val caption = (prompt ?: _uiState.value.chatInput).trim()
+            repository.sendChatImage(base64, fileName, caption)
+            _uiState.update { it.copy(chatInput = "") }
+        }
+    }
+
+    private fun uriToBase64(context: android.content.Context, uri: android.net.Uri): Pair<String, String>? {
+        return try {
+            val resolver = context.contentResolver
+            var fileName = "image_${System.currentTimeMillis()}.png"
+            resolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) {
+                    fileName = cursor.getString(nameIndex) ?: fileName
+                }
+            }
+            val inputStream = resolver.openInputStream(uri) ?: return null
+            val bytes = inputStream.readBytes()
+            inputStream.close()
+
+            val finalBase64 = if (bytes.size > 800 * 1024) {
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    val maxDim = 1400
+                    val ratio = (maxDim.toFloat() / Math.max(bitmap.width, bitmap.height)).coerceAtMost(1.0f)
+                    val newW = (bitmap.width * ratio).toInt()
+                    val newH = (bitmap.height * ratio).toInt()
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+                    val baos = java.io.ByteArrayOutputStream()
+                    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
+                    android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                } else {
+                    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                }
+            } else {
+                android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            }
+            Pair(finalBase64, fileName)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun sendChatPrompt(prompt: String? = null) {
         val textToSend = (prompt ?: _uiState.value.chatInput).trim()
         if (textToSend.isNotEmpty()) {
@@ -182,8 +232,8 @@ class AntigravityViewModel(
         repository.requestConversationSessions()
     }
 
-    fun requestChatHistory() {
-        repository.requestChatHistory()
+    fun requestChatHistory(convId: String? = null) {
+        repository.requestChatHistory(convId)
     }
 
     // ==========================================

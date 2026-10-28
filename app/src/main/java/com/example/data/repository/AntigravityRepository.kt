@@ -48,11 +48,12 @@ class AntigravityRepository(
     fun clearLogs() = client.clearLogs()
 
     // Upgraded commands for AI Agent & Workspace
+    fun sendChatImage(base64Data: String, fileName: String, prompt: String, convId: String? = null) = client.sendChatImage(base64Data, fileName, prompt, convId)
     fun sendAgentStreamPrompt(prompt: String, convId: String? = null) = client.sendAgentStreamPrompt(prompt, convId)
     fun cancelAgentTask() = client.cancelAgentTask()
     fun requestWorkspaceInfo() = client.requestWorkspaceInfo()
     fun requestWorkspaceFiles() = client.requestWorkspaceFiles()
-    fun requestChatHistory() = client.requestChatHistory()
+    fun requestChatHistory(convId: String? = null) = client.requestChatHistory(convId)
     fun requestConversationSessions() = client.requestConversationSessions()
     fun requestReadFile(relativePath: String) = client.requestReadFile(relativePath)
     fun triggerSaveAll() = client.triggerSaveAll()

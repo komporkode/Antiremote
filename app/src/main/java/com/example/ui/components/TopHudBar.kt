@@ -1,23 +1,22 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,12 +38,25 @@ fun TopHudBar(
     onSaveAllClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isConnected = config.status == ConnectionStatus.CONNECTED
     val (statusColor, statusTitle) = when (config.status) {
         ConnectionStatus.CONNECTED -> AccentSuccess to "Online"
         ConnectionStatus.CONNECTING -> AccentWarning to "Menghubungkan"
         ConnectionStatus.ERROR -> AccentDanger to "Error"
         ConnectionStatus.DISCONNECTED -> ContentTertiary to "Offline"
     }
+
+    // Breathing pulse animation for live connection indicator
+    val infiniteTransition = rememberInfiniteTransition(label = "LivePulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = if (isConnected) 0.35f else 1.0f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "PulseAlpha"
+    )
 
     Surface(
         modifier = modifier
@@ -57,60 +69,104 @@ fun TopHudBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Breadcrumb (Project › Active File)
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            // Left: Header Title "Chat" + Subtitle "• Project • :Port"
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Folder,
-                    contentDescription = null,
-                    tint = AccentPrimary,
-                    modifier = Modifier.size(16.dp)
-                )
-
                 Text(
-                    text = workspaceInfo.projectName,
-                    style = MaterialTheme.typography.labelMedium.copy(
+                    text = "Chat",
+                    style = MaterialTheme.typography.titleMedium.copy(
                         color = ContentPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp
-                    ),
-                    maxLines = 1
-                )
-
-                Text(
-                    text = "›",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = ContentTertiary,
-                        fontSize = 12.sp
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
                     )
                 )
 
-                Text(
-                    text = "${workspaceInfo.activeFileName}:${workspaceInfo.cursorLine}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = ContentSecondary,
-                        fontSize = 11.sp
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .alpha(if (isConnected) pulseAlpha else 1.0f)
+                            .background(statusColor)
+                    )
+
+                    val dispProject = workspaceInfo.projectName.ifBlank { "Dengar" }
+                    Text(
+                        text = dispProject,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = ContentSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = ContentTertiary,
+                            fontSize = 11.sp
+                        )
+                    )
+
+                    Text(
+                        text = ":${workspaceInfo.devPort ?: 3000}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = AccentPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    )
+                }
             }
 
-            // Right: High-Signal Actions (Connection Status Pill + Settings)
+            // Right: Git Branch Capsule Chip + Connection Pill + Settings
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Sleek Connection Status Pill (1-Tap Connection Manager)
+                // Git Branch Status Capsule
+                val dispBranch = workspaceInfo.gitBranch.ifBlank { "main" }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = CardSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AltRoute,
+                            contentDescription = null,
+                            tint = AccentPrimary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "$dispBranch sync",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = ContentSecondary,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 10.sp
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                // Connection Manager Pill
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
@@ -121,9 +177,9 @@ fun TopHudBar(
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -136,7 +192,7 @@ fun TopHudBar(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = ContentPrimary,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         )
                     }
@@ -146,14 +202,14 @@ fun TopHudBar(
                 IconButton(
                     onClick = onOpenSettingsClick,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(26.dp)
                         .testTag("btn_open_settings")
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "Pengaturan",
                         tint = ContentSecondary,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

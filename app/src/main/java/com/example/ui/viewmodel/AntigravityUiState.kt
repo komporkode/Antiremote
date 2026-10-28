@@ -2,10 +2,9 @@ package com.example.ui.viewmodel
 
 enum class DashboardTab(val label: String) {
     CHAT("Chat"),
-    REVIEW("Review"),
-    PREVIEW("Preview"),
     TASKS("Tasks"),
-    TERMINAL("Terminal")
+    TERMINAL("Terminal"),
+    PREVIEW("Preview")
 }
 
 enum class LogFilter(val label: String) {

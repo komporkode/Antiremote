@@ -27,10 +27,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val notifManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notifManager.cancel(BridgeNotificationService.NOTIFICATION_ID_APPROVAL)
 
-        Toast.makeText(
-            context,
-            if (isApproved) "✓ Izin eksekusi disetujui" else "✗ Izin eksekusi ditolak",
-            Toast.LENGTH_SHORT
-        ).show()
+        val message = when {
+            choice.equals("Allow", ignoreCase = true) || choice.equals("Izinkan", ignoreCase = true) -> "✓ Izin eksekusi disetujui"
+            choice.equals("Reject", ignoreCase = true) || choice.equals("Tolak", ignoreCase = true) -> "✗ Izin eksekusi ditolak"
+            choice.length > 30 -> "✓ Terpilih: ${choice.take(27)}..."
+            else -> "✓ Terpilih: $choice"
+        }
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 }

@@ -170,45 +170,81 @@ class BridgeNotificationService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val allowIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_APPROVE
-                putExtra(NotificationActionReceiver.EXTRA_APPROVAL_ID, approval.id)
-                putExtra(NotificationActionReceiver.EXTRA_CHOICE, "Allow")
+            val isQuestion = approval.actionType.equals("ASK_QUESTION", ignoreCase = true)
+            val notifTitle = if (isQuestion) "❓ Pertanyaan AI: ${approval.title}" else "⚠️ Izin Diperlukan: ${approval.title}"
+            val notifText = approval.detail.ifEmpty {
+                if (isQuestion) "AI Agent mengajukan pertanyaan untuk Anda." else "AI Agent meminta persetujuan eksekusi perintah."
             }
-            val allowPendingIntent = PendingIntent.getBroadcast(
-                this,
-                approval.id.hashCode(),
-                allowIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
 
-            val denyIntent = Intent(this, NotificationActionReceiver::class.java).apply {
-                action = NotificationActionReceiver.ACTION_DENY
-                putExtra(NotificationActionReceiver.EXTRA_APPROVAL_ID, approval.id)
-                putExtra(NotificationActionReceiver.EXTRA_CHOICE, "Reject")
-            }
-            val denyPendingIntent = PendingIntent.getBroadcast(
-                this,
-                approval.id.hashCode() + 1,
-                denyIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val optionsSummary = if (isQuestion && approval.options.isNotEmpty()) {
+                approval.options.mapIndexed { idx, opt -> "${idx + 1}. $opt" }.joinToString("\n")
+            } else ""
+            val fullBigText = if (optionsSummary.isNotEmpty()) "$notifText\n\n$optionsSummary" else notifText
 
-            val notif = NotificationCompat.Builder(this, CHANNEL_ID_APPROVAL)
+            val notifBuilder = NotificationCompat.Builder(this, CHANNEL_ID_APPROVAL)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("⚠️ Izin Diperlukan: ${approval.title}")
-                .setContentText(approval.detail.ifEmpty { "AI Agent meminta persetujuan eksekusi perintah." })
-                .setStyle(NotificationCompat.BigTextStyle().bigText(approval.detail))
+                .setContentTitle(notifTitle)
+                .setContentText(notifText)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(fullBigText))
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setDefaults(Notification.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setContentIntent(contentIntent)
-                .addAction(0, "Izinkan (Allow)", allowPendingIntent)
-                .addAction(0, "Tolak (Deny)", denyPendingIntent)
-                .setVibrate(longArrayOf(0, 250, 150, 250))
-                .build()
+                .setVibrate(longArrayOf(0, 300, 150, 300, 150, 400))
 
-            notificationManager.notify(NOTIFICATION_ID_APPROVAL, notif)
+            if (isQuestion && approval.options.isNotEmpty()) {
+                // Tambahkan hingga 3 aksi opsi cepat langsung pada notifikasi
+                approval.options.take(3).forEachIndexed { index, option ->
+                    val optIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+                        action = NotificationActionReceiver.ACTION_APPROVE
+                        putExtra(NotificationActionReceiver.EXTRA_APPROVAL_ID, approval.id)
+                        putExtra(NotificationActionReceiver.EXTRA_CHOICE, option)
+                    }
+                    val optPendingIntent = PendingIntent.getBroadcast(
+                        this,
+                        approval.id.hashCode() + index + 10,
+                        optIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    val shortLabel = if (option.length > 25) {
+                        "${index + 1}. ${option.take(22)}..."
+                    } else {
+                        "${index + 1}. $option"
+                    }
+                    notifBuilder.addAction(0, shortLabel, optPendingIntent)
+                }
+            } else {
+                val allowIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+                    action = NotificationActionReceiver.ACTION_APPROVE
+                    putExtra(NotificationActionReceiver.EXTRA_APPROVAL_ID, approval.id)
+                    putExtra(NotificationActionReceiver.EXTRA_CHOICE, "Allow")
+                }
+                val allowPendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    approval.id.hashCode(),
+                    allowIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val denyIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+                    action = NotificationActionReceiver.ACTION_DENY
+                    putExtra(NotificationActionReceiver.EXTRA_APPROVAL_ID, approval.id)
+                    putExtra(NotificationActionReceiver.EXTRA_CHOICE, "Reject")
+                }
+                val denyPendingIntent = PendingIntent.getBroadcast(
+                    this,
+                    approval.id.hashCode() + 1,
+                    denyIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                notifBuilder.addAction(0, "Izinkan (Allow)", allowPendingIntent)
+                notifBuilder.addAction(0, "Tolak (Deny)", denyPendingIntent)
+            }
+
+            notificationManager.notify(NOTIFICATION_ID_APPROVAL, notifBuilder.build())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to show approval notification", e)
         }
