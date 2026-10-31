@@ -17,6 +17,7 @@ class AntigravityRepository(
     val chatMessages: StateFlow<List<AgentChatMessage>> = client.chatMessages
     val isAgentStreaming: StateFlow<Boolean> = client.isAgentStreaming
     val agentToolBadge: StateFlow<String?> = client.agentToolBadge
+    val activeModelName: StateFlow<String?> = client.activeModelName
     val conversationId: StateFlow<String?> = client.conversationId
     val workspaceInfo: StateFlow<WorkspaceInfo> = client.workspaceInfo
     val workspaceFileList: StateFlow<List<String>> = client.workspaceFileList
@@ -34,6 +35,7 @@ class AntigravityRepository(
     val activeDevServers: StateFlow<List<ActiveDevServer>> = client.activeDevServers
     val workspaceScripts: StateFlow<List<WorkspaceScript>> = client.workspaceScripts
     val isChatFocusMode: StateFlow<Boolean> = client.isChatFocusMode
+    val isPcCaffeineActive: StateFlow<Boolean> = client.isPcCaffeineActive
 
     fun connect(ip: String, port: Int = 9876, pin: String? = null) = client.connect(ip, port, pin)
     fun initStorage(context: android.content.Context) = client.initPreferences(context)
@@ -78,4 +80,6 @@ class AntigravityRepository(
     fun runWorkspaceScript(command: String) = client.runWorkspaceScript(command)
     fun toggleChatFocusMode() = client.toggleChatFocusMode()
     fun requestLayoutState() = client.requestLayoutState()
+    fun togglePcCaffeine() = client.togglePcCaffeine()
+    fun setPcCaffeine(enabled: Boolean) = client.setPcCaffeine(enabled)
 }

@@ -25,6 +25,7 @@ class AntigravityViewModel(
     val chatMessages: StateFlow<List<AgentChatMessage>> = repository.chatMessages
     val isAgentStreaming: StateFlow<Boolean> = repository.isAgentStreaming
     val agentToolBadge: StateFlow<String?> = repository.agentToolBadge
+    val activeModelName: StateFlow<String?> = repository.activeModelName
     val workspaceInfo: StateFlow<WorkspaceInfo> = repository.workspaceInfo
     val workspaceFileList: StateFlow<List<String>> = repository.workspaceFileList
     val activeFileContent: StateFlow<FileContentData?> = repository.activeFileContent
@@ -39,6 +40,7 @@ class AntigravityViewModel(
     val activeDevServers: StateFlow<List<ActiveDevServer>> = repository.activeDevServers
     val workspaceScripts: StateFlow<List<WorkspaceScript>> = repository.workspaceScripts
     val isChatFocusMode: StateFlow<Boolean> = repository.isChatFocusMode
+    val isPcCaffeineActive: StateFlow<Boolean> = repository.isPcCaffeineActive
 
     fun selectTab(tab: DashboardTab) {
         _uiState.update { it.copy(selectedTab = tab) }
@@ -365,4 +367,5 @@ class AntigravityViewModel(
     }
 
     fun toggleChatFocusMode() = repository.toggleChatFocusMode()
+    fun togglePcCaffeine(): Boolean = repository.togglePcCaffeine()
 }

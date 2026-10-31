@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.outlined.Coffee
 import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -32,6 +34,8 @@ fun TopHudBar(
     workspaceInfo: WorkspaceInfo,
     isKeepScreenOn: Boolean = false,
     onToggleKeepScreenOn: () -> Unit = {},
+    isPcCaffeineActive: Boolean = false,
+    onTogglePcCaffeine: () -> Unit = {},
     onOpenSettingsClick: () -> Unit = {},
     onOpenConnectionDialog: () -> Unit,
     onScanQrClick: () -> Unit,
@@ -192,6 +196,41 @@ fun TopHudBar(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = ContentPrimary,
                                 fontWeight = FontWeight.SemiBold,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
+
+                // Caffeine (PC Anti-Sleep) Pill Button
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onTogglePcCaffeine() }
+                        .testTag("caffeine_toggle_pill"),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isPcCaffeineActive) AccentWarning.copy(alpha = 0.18f) else CardSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isPcCaffeineActive) AccentWarning.copy(alpha = 0.6f) else CardBorder
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPcCaffeineActive) Icons.Filled.Coffee else Icons.Outlined.Coffee,
+                            contentDescription = "PC Anti-Sleep Caffeine",
+                            tint = if (isPcCaffeineActive) AccentWarning else ContentTertiary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = if (isPcCaffeineActive) "Awake" else "Caffeine",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (isPcCaffeineActive) AccentWarning else ContentSecondary,
+                                fontWeight = if (isPcCaffeineActive) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 10.sp
                             )
                         )

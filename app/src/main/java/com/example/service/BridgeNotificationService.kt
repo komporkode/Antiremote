@@ -16,6 +16,8 @@ import com.example.MainActivity
 import com.example.data.model.AgentApprovalRequest
 import com.example.data.model.ConnectionStatus
 import com.example.data.network.LanBridgeClient
+import android.net.wifi.WifiManager
+import android.os.PowerManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 
@@ -24,6 +26,8 @@ class BridgeNotificationService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var notificationManager: NotificationManager
     private val client: LanBridgeClient by lazy { LanBridgeClient.getInstance() }
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     companion object {
         private const val TAG = "BridgeNotifService"
@@ -73,15 +77,18 @@ class BridgeNotificationService : Service() {
         try {
             when (intent?.action) {
                 ACTION_STOP -> {
+                    releaseLocks()
                     stopForegroundSafely()
                     stopSelf()
                     return START_NOT_STICKY
                 }
                 ACTION_START -> {
+                    acquireLocks()
                     startForegroundSafely("Terhubung ke Antigravity IDE")
                     observeClientEvents()
                 }
                 else -> {
+                    acquireLocks()
                     startForegroundSafely("Antigravity Remote Bridge Aktif")
                     observeClientEvents()
                 }
@@ -90,6 +97,64 @@ class BridgeNotificationService : Service() {
             Log.e(TAG, "Error in onStartCommand", e)
         }
         return START_STICKY
+    }
+
+    private fun acquireLocks() {
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = powerManager?.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "Antiremote:BridgeWakeLock"
+                )?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (wakeLock?.isHeld == false) {
+                wakeLock?.acquire(24 * 60 * 60 * 1000L) // Safeguard 24 jam
+                Log.d(TAG, "WakeLock acquired")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire WakeLock", e)
+        }
+
+        try {
+            if (wifiLock == null) {
+                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                @Suppress("DEPRECATION")
+                wifiLock = wifiManager?.createWifiLock(
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                    "Antiremote:BridgeWifiLock"
+                )?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (wifiLock?.isHeld == false) {
+                wifiLock?.acquire()
+                Log.d(TAG, "WifiLock acquired")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire WifiLock", e)
+        }
+    }
+
+    private fun releaseLocks() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release WakeLock", e)
+        }
+        try {
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
+                Log.d(TAG, "WifiLock released")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release WifiLock", e)
+        }
     }
 
     private fun startForegroundSafely(contentText: String) {
@@ -128,16 +193,32 @@ class BridgeNotificationService : Service() {
     }
 
     private fun observeClientEvents() {
-        // Observe Connection Status - auto stop if disconnected
+        // Observe Connection Status - tahan background service selama auto-reconnect aktif
         serviceScope.launch {
             client.connectionConfig.collectLatest { config ->
                 try {
-                    if (config.status == ConnectionStatus.CONNECTED) {
-                        val notif = buildForegroundNotification("Terkoneksi ke ${config.hostname.ifEmpty { "Workstation" }} (${config.ipAddress}:${config.port})")
-                        notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notif)
-                    } else if (config.status == ConnectionStatus.DISCONNECTED || config.status == ConnectionStatus.ERROR) {
-                        stopForegroundSafely()
-                        stopSelf()
+                    when (config.status) {
+                        ConnectionStatus.CONNECTED -> {
+                            acquireLocks()
+                            val notif = buildForegroundNotification("Terkoneksi ke ${config.hostname.ifEmpty { "Workstation" }} (${config.ipAddress}:${config.port})")
+                            notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notif)
+                        }
+                        ConnectionStatus.CONNECTING -> {
+                            acquireLocks()
+                            val notif = buildForegroundNotification("Menghubungkan kembali ke ${config.ipAddress.ifEmpty { "Workstation" }}...")
+                            notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notif)
+                        }
+                        ConnectionStatus.DISCONNECTED, ConnectionStatus.ERROR -> {
+                            if (client.isExplicitDisconnectState) {
+                                releaseLocks()
+                                stopForegroundSafely()
+                                stopSelf()
+                            } else {
+                                // Background temporary drop or auto-reconnecting -> jangan bunuh service
+                                val notif = buildForegroundNotification("Koneksi terputus. Menunggu reconnect otomatis...")
+                                notificationManager.notify(NOTIFICATION_ID_FOREGROUND, notif)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in connectionConfig observer", e)
@@ -149,7 +230,7 @@ class BridgeNotificationService : Service() {
         serviceScope.launch {
             client.pendingApproval.collectLatest { approval ->
                 try {
-                    if (approval != null) {
+                    if (approval != null && approval.status == com.example.data.model.ApprovalStatus.PENDING && !client.resolvedApprovalIds.contains(approval.id)) {
                         showApprovalNotification(approval)
                     } else {
                         notificationManager.cancel(NOTIFICATION_ID_APPROVAL)
@@ -298,6 +379,7 @@ class BridgeNotificationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        releaseLocks()
         serviceScope.cancel()
         super.onDestroy()
     }

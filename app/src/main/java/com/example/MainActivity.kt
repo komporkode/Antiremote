@@ -103,6 +103,7 @@ fun AntigravityApp(
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isAgentStreaming by viewModel.isAgentStreaming.collectAsStateWithLifecycle()
     val agentToolBadge by viewModel.agentToolBadge.collectAsStateWithLifecycle()
+    val activeModelName by viewModel.activeModelName.collectAsStateWithLifecycle()
 
     // Linear Minimalist features
     val pendingApproval by viewModel.pendingApproval.collectAsStateWithLifecycle()
@@ -116,6 +117,7 @@ fun AntigravityApp(
     val activeDevServers by viewModel.activeDevServers.collectAsStateWithLifecycle()
     val workspaceScripts by viewModel.workspaceScripts.collectAsStateWithLifecycle()
     val isChatFocusMode by viewModel.isChatFocusMode.collectAsStateWithLifecycle()
+    val isPcCaffeineActive by viewModel.isPcCaffeineActive.collectAsStateWithLifecycle()
 
     var isKeepScreenOn by remember { mutableStateOf(false) }
 
@@ -174,7 +176,7 @@ fun AntigravityApp(
             } catch (e: Exception) {
                 android.util.Log.e("MainActivity", "Failed to start BridgeNotificationService", e)
             }
-        } else if (config.status == ConnectionStatus.DISCONNECTED || config.status == ConnectionStatus.ERROR) {
+        } else if ((config.status == ConnectionStatus.DISCONNECTED || config.status == ConnectionStatus.ERROR) && com.example.data.network.LanBridgeClient.getInstance().isExplicitDisconnectState) {
             try {
                 BridgeNotificationService.stop(context)
             } catch (e: Exception) {
@@ -202,6 +204,15 @@ fun AntigravityApp(
                 workspaceInfo = workspaceInfo,
                 isKeepScreenOn = isKeepScreenOn,
                 onToggleKeepScreenOn = { isKeepScreenOn = !isKeepScreenOn },
+                isPcCaffeineActive = isPcCaffeineActive,
+                onTogglePcCaffeine = {
+                    val newState = viewModel.togglePcCaffeine()
+                    Toast.makeText(
+                        context,
+                        if (newState) "☕ PC Caffeine Aktif: Workstation dicegah sleep" else "💤 PC Caffeine Nonaktif: Mode daya normal",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
                 onOpenSettingsClick = { showSettingsDialog = true },
                 onOpenConnectionDialog = { viewModel.showConnectionDialog(true) },
                 onScanQrClick = { viewModel.showQrScanner(true) },
@@ -327,6 +338,7 @@ fun AntigravityApp(
                         messages = chatMessages,
                         isStreaming = isAgentStreaming,
                         activeToolBadge = agentToolBadge,
+                        activeModelName = activeModelName,
                         pendingApproval = pendingApproval,
                         inputPrompt = uiState.chatInput,
                         onInputChange = { viewModel.updateChatInput(it) },

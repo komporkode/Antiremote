@@ -56,6 +56,7 @@ fun AgentChatScreen(
     messages: List<AgentChatMessage>,
     isStreaming: Boolean,
     activeToolBadge: String?,
+    activeModelName: String? = null,
     pendingApproval: AgentApprovalRequest? = null,
     inputPrompt: String,
     onInputChange: (String) -> Unit,
@@ -169,7 +170,7 @@ fun AgentChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -206,6 +207,33 @@ fun AgentChatScreen(
                                     fontFamily = FontFamily.Monospace
                                 )
                             )
+                        }
+                    }
+                    if (!activeModelName.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AccentPrimarySoft,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.35f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(AccentPrimary, androidx.compose.foundation.shape.CircleShape)
+                                )
+                                Text(
+                                    text = activeModelName,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = AccentPrimary,
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
                         }
                     }
                     IconButton(
@@ -265,9 +293,9 @@ fun AgentChatScreen(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag("agent_chat_messages_list"),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (displayMessages.isEmpty()) {
                     item {
@@ -364,60 +392,121 @@ fun AgentChatScreen(
 
         // Sticky Approval Prompt Banner (Jika ada approval yang pending)
         if (pendingApproval != null && pendingApproval.status == ApprovalStatus.PENDING) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = AccentWarningSoft,
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentWarning.copy(alpha = 0.4f))
-            ) {
-                Row(
+            val isQuestion = pendingApproval.actionType.equals("ASK_QUESTION", ignoreCase = true)
+            if (isQuestion) {
+                // Untuk pertanyaan: JANGAN berikan tombol 'Izinkan' yang bisa salah terkirim sebagai jawaban!
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 12.dp, vertical = 3.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = AccentPrimarySoft,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentPrimary.copy(alpha = 0.4f))
                 ) {
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Security,
-                            contentDescription = null,
-                            tint = AccentWarning,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Izin Diperlukan: ${pendingApproval.title}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = ContentPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            maxLines = 1
-                        )
-                    }
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.HelpOutline,
+                                contentDescription = null,
+                                tint = AccentPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Pertanyaan AI: ${pendingApproval.title}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = ContentPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(
-                            onClick = { onApprovalResponse(pendingApproval.id, true, "Izinkan") },
+                            onClick = {
+                                coroutineScope.launch {
+                                    if (displayMessages.isNotEmpty()) {
+                                        listState.animateScrollToItem(displayMessages.size - 1)
+                                    }
+                                }
+                            },
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             modifier = Modifier.height(28.dp)
                         ) {
-                            Text("Izinkan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Lihat Opsi", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        OutlinedButton(
-                            onClick = { onApprovalResponse(pendingApproval.id, false, "Tolak") },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
+                    }
+                }
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 3.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = AccentWarningSoft,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentWarning.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Tolak", fontSize = 11.sp, color = ContentSecondary)
+                            Icon(
+                                imageVector = Icons.Outlined.Security,
+                                contentDescription = null,
+                                tint = AccentWarning,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Izin Diperlukan: ${pendingApproval.title}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = ContentPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(
+                                onClick = { onApprovalResponse(pendingApproval.id, true, "Izinkan") },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Izinkan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            OutlinedButton(
+                                onClick = { onApprovalResponse(pendingApproval.id, false, "Tolak") },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Tolak", fontSize = 11.sp, color = ContentSecondary)
+                            }
                         }
                     }
                 }
@@ -433,8 +522,8 @@ fun AgentChatScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = CardSurfaceVariant,
                 border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
             ) {
@@ -501,9 +590,9 @@ fun AgentChatScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = 4.dp)
                 .testTag("action_chips_bar"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Quick Action Macros with Tactile Press Micro-Animation
             quickActionMacros.forEach { (label, icon, prompt) ->

@@ -8,7 +8,9 @@ import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -77,6 +79,7 @@ fun AppPreviewScreen(
     var pageTitle by remember { mutableStateOf("Memuat...") }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
+    var webViewError by remember { mutableStateOf<String?>(null) }
 
     // Viewport & Mode Desktop State
     var selectedViewport by remember { mutableStateOf(ViewportMode.FULL) }
@@ -102,6 +105,7 @@ fun AppPreviewScreen(
 
     // Update WebView when effectiveUrl changes
     LaunchedEffect(effectiveUrl) {
+        webViewError = null
         if (effectiveUrl.isNotBlank() && webViewRef != null && webViewRef?.url != effectiveUrl) {
             webViewRef?.loadUrl(effectiveUrl)
         }
@@ -475,16 +479,24 @@ fun AppPreviewScreen(
                                 isEditingUrl = false
                                 if (urlInput.isNotBlank()) {
                                     val clean = urlInput.trim()
+                                    val cleanHost = bridgeHost.removePrefix("http://")
+                                        .removePrefix("https://")
+                                        .removePrefix("ws://")
+                                        .removePrefix("wss://")
+                                        .substringBefore("/")
+                                        .substringBefore(":")
+                                        .ifBlank { "127.0.0.1" }
                                     val resolvedUrl = when {
-                                        clean.all { it.isDigit() } -> "http://${bridgeHost.ifBlank { "127.0.0.1" }}:$clean"
+                                        clean.all { it.isDigit() } -> "http://$cleanHost:$clean"
                                         clean.contains("localhost") || clean.contains("127.0.0.1") -> {
-                                            if (bridgeHost.isNotBlank() && !bridgeHost.contains("trycloudflare.com")) {
-                                                clean.replace("localhost", bridgeHost).replace("127.0.0.1", bridgeHost)
+                                            if (cleanHost.isNotBlank() && cleanHost != "127.0.0.1") {
+                                                clean.replace("localhost", cleanHost).replace("127.0.0.1", cleanHost)
                                             } else clean
                                         }
                                         !clean.startsWith("http://") && !clean.startsWith("https://") -> "http://$clean"
                                         else -> clean
                                     }
+                                    webViewError = null
                                     onSelectUrl(resolvedUrl)
                                     webViewRef?.loadUrl(resolvedUrl)
                                 }
@@ -696,6 +708,7 @@ fun AppPreviewScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                         super.onPageStarted(view, url, favicon)
+                                        webViewError = null
                                         canGoBack = view?.canGoBack() == true
                                         canGoForward = view?.canGoForward() == true
                                     }
@@ -711,20 +724,24 @@ fun AppPreviewScreen(
                                         return false // Tetap di dalam WebView
                                     }
 
-                                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-                                        val url = error?.url ?: view?.url ?: ""
-                                        // Bypass SSL hanya untuk IP lokal LAN & trycloudflare dev tunnel
-                                        val isDevHost = url.contains("192.168.") ||
-                                                url.contains("10.") ||
-                                                url.contains("172.") ||
-                                                url.contains("localhost") ||
-                                                url.contains("127.0.0.1") ||
-                                                url.contains(".trycloudflare.com")
-                                        if (isDevHost) {
-                                            handler?.proceed()
-                                        } else {
-                                            handler?.cancel()
+                                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                                        super.onReceivedError(view, request, error)
+                                        if (request?.isForMainFrame == true) {
+                                            val desc = error?.description?.toString() ?: "Koneksi gagal"
+                                            webViewError = "Tidak dapat memuat dev preview ($desc)"
                                         }
+                                    }
+
+                                    override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                                        super.onReceivedHttpError(view, request, errorResponse)
+                                        if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 200) >= 400) {
+                                            webViewError = "Server HTTP Error: ${errorResponse?.statusCode}"
+                                        }
+                                    }
+
+                                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                                        // Bypass SSL untuk localhost / IP lokal LAN & trycloudflare dev tunnel
+                                        handler?.proceed()
                                     }
                                 }
 
@@ -771,6 +788,125 @@ fun AppPreviewScreen(
                             webViewRef = view
                         }
                     )
+
+                    // Error Fallback Screen (Mencegah tampilan layar blank membingungkan)
+                    if (webViewError != null) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(AppBg),
+                            color = AppBg
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = AccentDangerSoft,
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudOff,
+                                            contentDescription = null,
+                                            tint = AccentDanger,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Text(
+                                    text = "Gagal Membuka Dev Preview",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        color = ContentPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = effectiveUrl,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = AccentPrimary,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = webViewError ?: "Koneksi ke server dev workstation terputus.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = ContentSecondary,
+                                        fontSize = 11.5.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = CardSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("💡 Tips Solusi:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ContentPrimary)
+                                        Text("• Pastikan dev server aktif di PC (misal: npm run dev)", fontSize = 10.5.sp, color = ContentSecondary)
+                                        Text("• Tambahkan flag host jika Vite: npm run dev -- --host", fontSize = 10.5.sp, color = ContentSecondary)
+                                        Text("• Pastikan HP dan PC berada pada jaringan Wi-Fi yang sama", fontSize = 10.5.sp, color = ContentSecondary)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Button(
+                                        onClick = {
+                                            webViewError = null
+                                            webViewRef?.loadUrl(effectiveUrl)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentPrimary),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Coba Lagi", fontSize = 11.5.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(effectiveUrl))
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Browser Luar", fontSize = 11.5.sp, color = ContentSecondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

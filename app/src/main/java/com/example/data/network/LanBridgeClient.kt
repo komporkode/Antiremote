@@ -41,8 +41,17 @@ class LanBridgeClient(
     private var lastPort: Int = 9876
     private var lastPin: String? = null
     private var isExplicitDisconnect: Boolean = false
+    val isExplicitDisconnectState: Boolean get() = isExplicitDisconnect
     private var reconnectAttempts: Int = 0
     private var connectionPreferences: com.example.data.storage.ConnectionPreferences? = null
+
+    // Outbox queue untuk respon approval jika socket terputus/reconnecting
+    private val pendingApprovalOutbox = java.util.Collections.synchronizedList(mutableListOf<JSONObject>())
+
+    // PC Caffeine (Anti-Sleep) Workstation State
+    private val _isPcCaffeineActive = MutableStateFlow(false)
+    val isPcCaffeineActive: StateFlow<Boolean> = _isPcCaffeineActive.asStateFlow()
+    private var isManualPcCaffeine = false
 
     private val _connectionConfig = MutableStateFlow(ConnectionConfig())
     val connectionConfig: StateFlow<ConnectionConfig> = _connectionConfig.asStateFlow()
@@ -72,6 +81,9 @@ class LanBridgeClient(
     private val _conversationId = MutableStateFlow<String?>(null)
     val conversationId: StateFlow<String?> = _conversationId.asStateFlow()
 
+    private val _activeModelName = MutableStateFlow<String?>(null)
+    val activeModelName: StateFlow<String?> = _activeModelName.asStateFlow()
+
     private val _workspaceInfo = MutableStateFlow(WorkspaceInfo(
         projectName = "Workspace",
         activeFileName = "Tidak ada berkas aktif",
@@ -96,6 +108,7 @@ class LanBridgeClient(
     val activeFileContent: StateFlow<FileContentData?> = _activeFileContent.asStateFlow()
 
     // 1. Human-in-the-Loop Approval Request State
+    val resolvedApprovalIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private val _pendingApproval = MutableStateFlow<AgentApprovalRequest?>(null)
     val pendingApproval: StateFlow<AgentApprovalRequest?> = _pendingApproval.asStateFlow()
 
@@ -124,6 +137,20 @@ class LanBridgeClient(
 
     init {
         appendTerminalLog(LogLevel.INFO, "Antigravity Remote Client siap (Port Default: 9876). Scan QR atau hubungkan.")
+        // Smart Auto-Caffeine: saat Agent streaming/berpikir, tahan PC agar tidak sleep
+        scope.launch {
+            _isAgentStreaming.collect { streaming ->
+                if (streaming) {
+                    if (!_isPcCaffeineActive.value) {
+                        sendPcCaffeineState(true, reason = "agent_streaming")
+                    }
+                } else {
+                    if (!isManualPcCaffeine && _isPcCaffeineActive.value) {
+                        sendPcCaffeineState(false, reason = "agent_idle")
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -243,6 +270,16 @@ class LanBridgeClient(
                     }
                     ws.send(authPayload.toString())
                     appendTerminalLog(LogLevel.INFO, "Mengirim PIN otentikasi keamanan...")
+                }
+
+                // Kirim respon approval yang tersimpan di outbox (jika ada yang dijawab saat offline/reconnect)
+                flushApprovalOutbox(ws)
+
+                // Sinkronkan status Caffeine (Anti-Sleep) ke Workstation
+                if (_isPcCaffeineActive.value || isManualPcCaffeine) {
+                    sendPcCaffeineState(true, reason = "reconnected")
+                } else {
+                    requestPcCaffeineState()
                 }
 
                 // Auto fetch workspace info, files, chat history, scripts, and dev servers on handshake
@@ -378,7 +415,11 @@ class LanBridgeClient(
                 // 4. AGENT SELESAI (BARU!)
                 "AGENT_DONE", "AGENT_FINISHED", "STREAM_DONE", "DONE" -> {
                     val convId = json.optString("conversationId", json.optString("sessionId", "")).ifEmpty { null }
-                    finishChatStream(convId)
+                    val model = json.optString("modelName", "").ifEmpty { null }
+                    if (model != null) {
+                        _activeModelName.value = model
+                    }
+                    finishChatStream(convId, model)
                 }
 
                 // 5. INFO WORKSPACE & FILE AKTIF (BARU!)
@@ -438,8 +479,15 @@ class LanBridgeClient(
 
                             // Utamakan IP Network Workstation jika lanUrl kosong atau masih localhost
                             if (lanUrl.isBlank() || lanUrl.contains("localhost") || lanUrl.contains("127.0.0.1")) {
-                                if (currentHost.isNotBlank() && currentHost != "localhost" && currentHost != "127.0.0.1" && !currentHost.contains("trycloudflare.com")) {
-                                    lanUrl = "http://$currentHost:$port"
+                                val cleanHost = currentHost.removePrefix("http://")
+                                    .removePrefix("https://")
+                                    .removePrefix("ws://")
+                                    .removePrefix("wss://")
+                                    .substringBefore("/")
+                                    .substringBefore(":")
+                                    .trim()
+                                if (cleanHost.isNotBlank() && cleanHost != "localhost" && cleanHost != "127.0.0.1" && !cleanHost.contains("trycloudflare.com")) {
+                                    lanUrl = "http://$cleanHost:$port"
                                 }
                             }
 
@@ -509,6 +557,17 @@ class LanBridgeClient(
                     )
                 }
 
+                // 5e. STATUS CAFFEINE (ANTI-SLEEP) WORKSTATION
+                "PC_CAFFEINE_STATUS", "CAFFEINE_STATUS" -> {
+                    val active = json.optBoolean("enabled", json.optBoolean("active", false))
+                    _isPcCaffeineActive.value = active
+                    appendTerminalLog(
+                        LogLevel.INFO,
+                        if (active) "☕ [CAFFEINE] Workstation mengonfirmasi: Anti-Sleep Aktif."
+                        else "💤 [CAFFEINE] Workstation mengonfirmasi: Anti-Sleep Nonaktif."
+                    )
+                }
+
                 // 6. DAFTAR FILE PROJECT (BARU!)
                 "WORKSPACE_FILES" -> {
                     val filesArray = json.optJSONArray("files")
@@ -534,6 +593,10 @@ class LanBridgeClient(
                     if (convId.isNotBlank()) {
                         _conversationId.value = convId
                     }
+                    val activeModel = json.optString("activeModel", "").ifEmpty { null }
+                    if (activeModel != null) {
+                        _activeModelName.value = activeModel
+                    }
                     val messagesArray = json.optJSONArray("messages")
                     val historyList = mutableListOf<AgentChatMessage>()
                     if (messagesArray != null) {
@@ -547,6 +610,7 @@ class LanBridgeClient(
                             }
                             val textContent = msgObj.optString("text", msgObj.optString("content", msgObj.optString("message", "")))
                             val badge = msgObj.optString("toolBadge", "").ifEmpty { null }
+                            val model = msgObj.optString("modelName", "").ifEmpty { null }
 
                             // Jangan masukkan tool execution background kosong ke riwayat chat
                             if (textContent.isBlank() && sender == ChatSender.AGENT && !msgObj.has("approvalRequest")) {
@@ -558,7 +622,9 @@ class LanBridgeClient(
                                 val aObj = msgObj.optJSONObject("approvalRequest")
                                 if (aObj != null) {
                                     approvalReq = parseApprovalRequest(aObj)
-                                    if (approvalReq.status == ApprovalStatus.PENDING) {
+                                    if (resolvedApprovalIds.contains(approvalReq.id)) {
+                                        approvalReq = approvalReq.copy(status = ApprovalStatus.APPROVED)
+                                    } else if (approvalReq.status == ApprovalStatus.PENDING) {
                                         _pendingApproval.value = approvalReq
                                     }
                                 }
@@ -570,6 +636,7 @@ class LanBridgeClient(
                                     text = textContent,
                                     isStreaming = false,
                                     toolBadge = badge,
+                                    modelName = model,
                                     approvalRequest = approvalReq
                                 )
                             )
@@ -646,7 +713,9 @@ class LanBridgeClient(
                 "AGENT_APPROVAL_REQUEST" -> {
                     val approvalObj = json.optJSONObject("approval") ?: json
                     val approval = parseApprovalRequest(approvalObj)
-                    _pendingApproval.value = approval
+                    if (!resolvedApprovalIds.contains(approval.id)) {
+                        _pendingApproval.value = approval
+                    }
                     _chatMessages.update { list ->
                         list + AgentChatMessage(
                             sender = ChatSender.AGENT,
@@ -664,6 +733,9 @@ class LanBridgeClient(
                     val statusStr = json.optString("status", "APPROVED")
                     val isApproved = statusStr != "REJECTED"
 
+                    if (resolvedId.isNotBlank()) {
+                        resolvedApprovalIds.add(resolvedId)
+                    }
                     if (_pendingApproval.value?.id == resolvedId || resolvedId.isEmpty()) {
                         _pendingApproval.value = null
                     }
@@ -833,7 +905,7 @@ class LanBridgeClient(
         _agentToolBadge.value = badgeText
     }
 
-    fun finishChatStream(conversationId: String?) {
+    fun finishChatStream(conversationId: String?, modelName: String? = null) {
         _isAgentStreaming.value = false
         _agentToolBadge.value = null
         if (!conversationId.isNullOrEmpty()) {
@@ -842,7 +914,7 @@ class LanBridgeClient(
         _chatMessages.update { list ->
             if (list.isNotEmpty() && list.last().sender == ChatSender.AGENT) {
                 val last = list.last()
-                list.dropLast(1) + last.copy(isStreaming = false)
+                list.dropLast(1) + last.copy(isStreaming = false, modelName = modelName ?: last.modelName)
             } else {
                 list
             }
@@ -1531,36 +1603,54 @@ export default function App() {
     }
 
     /**
-     * Kirim Respons Persetujuan (Human-in-the-Loop)
+     * Kirim Respons Persetujuan (Human-in-the-Loop) dengan Outbox Queue
      */
     fun sendApprovalResponse(id: String, approved: Boolean, choice: String) {
-        if (webSocket != null && !_connectionConfig.value.isDemoMode) {
-            val currentReq = _pendingApproval.value
-            val optionIdx = if (currentReq != null && currentReq.id == id) {
-                val idx = currentReq.options.indexOfFirst { it.equals(choice, ignoreCase = true) }
-                if (idx >= 0) idx + 1 else null
-            } else null
+        if (id.isNotBlank()) {
+            resolvedApprovalIds.add(id)
+        }
+        val currentReq = _pendingApproval.value
+        val optionIdx = if (currentReq != null && currentReq.id == id) {
+            val idx = currentReq.options.indexOfFirst { it.equals(choice, ignoreCase = true) }
+            if (idx >= 0) idx + 1 else null
+        } else null
 
-            val payload = JSONObject().apply {
-                put("type", "AGENT_APPROVAL_RESPONSE")
-                put("id", id)
-                put("approved", approved)
-                put("choice", choice)
-                if (optionIdx != null) {
-                    put("optionIndex", optionIdx)
-                }
+        val payload = JSONObject().apply {
+            put("type", "AGENT_APPROVAL_RESPONSE")
+            put("id", id)
+            put("approved", approved)
+            put("choice", choice)
+            if (optionIdx != null) {
+                put("optionIndex", optionIdx)
             }
-            webSocket?.send(payload.toString())
+            put("timestamp", System.currentTimeMillis())
         }
 
-        // Update local state
+        var sent = false
+        val isSocketReady = webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED && !_connectionConfig.value.isDemoMode
+        if (isSocketReady) {
+            sent = webSocket?.send(payload.toString()) == true
+        }
+
+        if (!sent && !_connectionConfig.value.isDemoMode) {
+            // Jika koneksi sedang terputus/reconnecting saat user menjawab, simpan ke antrian outbox
+            pendingApprovalOutbox.add(payload)
+            appendTerminalLog(LogLevel.WARN, "⚠ Jawaban untuk '$id' ($choice) disimpan ke antrian outbox (akan dikirim saat koneksi pulih).")
+        } else if (sent) {
+            appendTerminalLog(
+                if (approved) LogLevel.SUCCESS else LogLevel.WARN,
+                "[APPROVAL] Keputusan untuk '$id': $choice"
+            )
+        }
+
+        // Update local state - langsung bersihkan pendingApproval
         _pendingApproval.update { current ->
-            if (current?.id == id) null else current
+            if (current == null || current.id == id || id.isBlank()) null else current
         }
         _chatMessages.update { list ->
             list.map { msg ->
-                if (msg.approvalRequest?.id == id) {
-                    val updatedReq = msg.approvalRequest.copy(
+                if (msg.approvalRequest?.id == id || (id.isBlank() && msg.approvalRequest?.status == ApprovalStatus.PENDING)) {
+                    val updatedReq = msg.approvalRequest?.copy(
                         status = if (approved) ApprovalStatus.APPROVED else ApprovalStatus.REJECTED,
                         selectedOption = choice
                     )
@@ -1568,10 +1658,73 @@ export default function App() {
                 } else msg
             }
         }
+    }
+
+    /**
+     * Mengosongkan & mengirim semua jawaban approval dari outbox saat koneksi tersambung kembali
+     */
+    private fun flushApprovalOutbox(ws: WebSocket) {
+        synchronized(pendingApprovalOutbox) {
+            if (pendingApprovalOutbox.isNotEmpty()) {
+                val iterator = pendingApprovalOutbox.iterator()
+                var flushedCount = 0
+                while (iterator.hasNext()) {
+                    val queued = iterator.next()
+                    val ok = ws.send(queued.toString())
+                    if (ok) {
+                        flushedCount++
+                        appendTerminalLog(LogLevel.SUCCESS, "✓ [OUTBOX] Berhasil mengirim jawaban tertunda (ID: ${queued.optString("id")})")
+                        iterator.remove()
+                    }
+                }
+                if (flushedCount > 0) {
+                    appendTerminalLog(LogLevel.INFO, "Total $flushedCount jawaban approval tersinkronkan ke Workstation IDE.")
+                }
+            }
+        }
+    }
+
+    /**
+     * PC Caffeine (Anti-Sleep) Workstation
+     * Mencegah PC tertidur atau layar mati saat proses AI Agent sedang berjalan
+     */
+    fun togglePcCaffeine(): Boolean {
+        val newState = !_isPcCaffeineActive.value
+        isManualPcCaffeine = newState
+        sendPcCaffeineState(newState, reason = "manual_toggle")
+        return newState
+    }
+
+    fun setPcCaffeine(enabled: Boolean, manual: Boolean = true) {
+        if (manual) isManualPcCaffeine = enabled
+        sendPcCaffeineState(enabled, reason = if (manual) "manual" else "auto_agent")
+    }
+
+    fun sendPcCaffeineState(enabled: Boolean, reason: String = "manual") {
+        _isPcCaffeineActive.value = enabled
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "SET_PC_CAFFEINE")
+                put("enabled", enabled)
+                put("mode", "SYSTEM_AND_DISPLAY")
+                put("reason", reason)
+            }
+            webSocket?.send(payload.toString())
+        }
         appendTerminalLog(
-            if (approved) LogLevel.SUCCESS else LogLevel.WARN,
-            "[APPROVAL] Keputusan untuk '$id': $choice"
+            if (enabled) LogLevel.SUCCESS else LogLevel.INFO,
+            if (enabled) "☕ [CAFFEINE] Mode PC Anti-Sleep Aktif (Layar & CPU Workstation dicegah sleep)"
+            else "💤 [CAFFEINE] Mode PC Anti-Sleep Nonaktif (Kembali ke mode daya normal)"
         )
+    }
+
+    fun requestPcCaffeineState() {
+        if (webSocket != null && _connectionConfig.value.status == ConnectionStatus.CONNECTED && !_connectionConfig.value.isDemoMode) {
+            val payload = JSONObject().apply {
+                put("type", "GET_PC_CAFFEINE")
+            }
+            webSocket?.send(payload.toString())
+        }
     }
 
     /**

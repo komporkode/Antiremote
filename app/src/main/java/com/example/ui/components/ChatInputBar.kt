@@ -29,10 +29,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+
 /**
  * WhatsApp-style Chat Input Bar:
- * - Full-width capsule input field containing attachment (+) button
- * - Outside circular FAB (Send when text/image present, Mic when empty, Stop when streaming)
+ * - Pixel-perfect symmetrical 48dp capsule input field containing attachment (+) button
+ * - Outside 48dp circular FAB (Send when text/image present, Mic when empty, Stop when streaming)
  * - Attached image preview pill above capsule
  * - Does not push or squeeze the textarea into a narrow box
  */
@@ -112,11 +115,11 @@ fun ChatInputBar(
             }
         }
 
-        // 2. WhatsApp-Style Input Row
+        // 2. WhatsApp-Style Input Row: Symmetrical 48dp capsule + 48dp circular button
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Capsule Text Input Surface (WhatsApp Bubble)
             Surface(
@@ -130,7 +133,7 @@ fun ChatInputBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 4.dp, end = 8.dp),
+                        .padding(start = 4.dp, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Attachment Icon inside capsule on the left (Paperclip / Image)
@@ -144,16 +147,17 @@ fun ChatInputBar(
                             imageVector = if (attachedImageUri != null) Icons.Default.Image else Icons.Outlined.AttachFile,
                             contentDescription = "Lampirkan Gambar",
                             tint = if (attachedImageUri != null) AccentPrimary else ContentSecondary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // Main Text Input - Takes 100% of the capsule space
-                    TextField(
+                    // Main Text Input - perfectly aligned vertically with basic text field
+                    BasicTextField(
                         value = inputPrompt,
                         onValueChange = onInputChange,
                         modifier = Modifier
                             .weight(1f)
+                            .padding(vertical = 12.dp)
                             .onPreviewKeyEvent { keyEvent ->
                                 if (keyEvent.key == Key.Enter && !keyEvent.isShiftPressed && keyEvent.type == KeyEventType.KeyUp) {
                                     if (attachedImageUri != null) {
@@ -169,25 +173,12 @@ fun ChatInputBar(
                                 } else false
                             }
                             .testTag("agent_chat_input"),
-                        placeholder = {
-                            Text(
-                                text = "Ketik instruksi AI Agent...",
-                                color = ContentTertiary,
-                                fontSize = 14.sp
-                            )
-                        },
-                        maxLines = 5,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            focusedTextColor = ContentPrimary,
-                            unfocusedTextColor = ContentPrimary,
-                            cursorColor = AccentPrimary
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = ContentPrimary,
+                            fontSize = 14.sp
                         ),
+                        cursorBrush = SolidColor(AccentPrimary),
+                        maxLines = 5,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Send,
                             capitalization = KeyboardCapitalization.Sentences
@@ -201,77 +192,94 @@ fun ChatInputBar(
                                 onSendPrompt(inputPrompt)
                                 onInputChange("")
                             }
-                        })
+                        }),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (inputPrompt.isEmpty()) {
+                                    Text(
+                                        text = "Ketik instruksi AI Agent...",
+                                        color = ContentTertiary,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
                     )
                 }
             }
 
-            // Outside Circular Action Button (WhatsApp Style FAB)
-            if (isStreaming) {
-                // Stop Agent Button
-                FilledIconButton(
-                    onClick = onCancelAgent,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("btn_cancel_agent"),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = AccentDanger,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Hentikan Agent",
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            } else if (inputPrompt.isNotBlank() || attachedImageUri != null) {
-                // Send Message Button
-                FilledIconButton(
-                    onClick = {
-                        if (attachedImageUri != null) {
-                            onSendImage?.invoke(attachedImageUri, inputPrompt)
-                            onRemoveAttachedImage()
-                            onInputChange("")
-                        } else if (inputPrompt.isNotBlank()) {
-                            onSendPrompt(inputPrompt)
-                            onInputChange("")
-                        }
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("btn_send_agent_prompt"),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = AccentPrimary,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Kirim Prompt",
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else {
-                // Voice Dictation Button (When empty, like WhatsApp mic)
-                FilledTonalIconButton(
-                    onClick = onVoiceInputClick,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("btn_voice_input"),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = CardSurfaceVariant,
-                        contentColor = AccentPrimary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Mic,
-                        contentDescription = "Dikte Suara",
-                        modifier = Modifier.size(22.dp)
-                    )
+            // Outside Circular Action Button (Matching 48.dp)
+            Box(
+                modifier = Modifier.size(48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isStreaming) {
+                    FilledIconButton(
+                        onClick = onCancelAgent,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("btn_cancel_agent"),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = AccentDanger,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Hentikan Agent",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else if (inputPrompt.isNotBlank() || attachedImageUri != null) {
+                    FilledIconButton(
+                        onClick = {
+                            if (attachedImageUri != null) {
+                                onSendImage?.invoke(attachedImageUri, inputPrompt)
+                                onRemoveAttachedImage()
+                                onInputChange("")
+                            } else if (inputPrompt.isNotBlank()) {
+                                onSendPrompt(inputPrompt)
+                                onInputChange("")
+                            }
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("btn_send_agent_prompt"),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = AccentPrimary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Kirim Prompt",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else {
+                    FilledTonalIconButton(
+                        onClick = onVoiceInputClick,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("btn_voice_input"),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = CardSurfaceVariant,
+                            contentColor = AccentPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Mic,
+                            contentDescription = "Dikte Suara",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }

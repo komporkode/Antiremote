@@ -13,6 +13,7 @@ data class AgentChatMessage(
     val sender: ChatSender,
     val text: String,
     val toolBadge: String? = null,
+    val modelName: String? = null,
     val isStreaming: Boolean = false,
     val approvalRequest: AgentApprovalRequest? = null,
     val timestamp: Long = System.currentTimeMillis()
